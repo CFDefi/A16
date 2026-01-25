@@ -1,0 +1,15 @@
+[package]
+name = "a16_lexer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Lexer for the A16 programming language"
+
+[dependencies]
+logos.workspace = true
+smol_str.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+proptest.workspace = true

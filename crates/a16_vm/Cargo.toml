@@ -1,0 +1,18 @@
+[package]
+name = "a16_vm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Virtual Machine for A16 bytecode execution"
+
+[dependencies]
+a16_codegen = { path = "../a16_codegen" }
+a16_tensor = { path = "../a16_tensor" }
+a16_vector = { path = "../a16_vector" }
+smol_str.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]
+a16_parser = { path = "../a16_parser" }
+a16_hir = { path = "../a16_hir" }
+a16_codegen = { path = "../a16_codegen" }

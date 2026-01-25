@@ -1,0 +1,26 @@
+fn main():
+    println("Advanced Tensor Demo")
+    
+    let a = tensor_from_list([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], [2, 3])
+    println("Created from list:")
+    println(a)
+    
+    let shape = tensor_shape(a)
+    println("Shape:")
+    println(shape)
+    
+    let data = tensor_data(a)
+    println("Data:")
+    println(data)
+    
+    let b = tensor_ones([2, 3])
+    let diff = tensor_sub(a, b)
+    println("a - ones:")
+    println(tensor_data(diff))
+    
+    let loss = tensor_mean(diff)
+    println("Mean:")
+    println(tensor_item(loss))
+    
+    println("Done!")
+    return 0

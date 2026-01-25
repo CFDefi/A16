@@ -1,0 +1,11 @@
+fn main():
+    println("Fibonacci (iterative):")
+    for n in range(15):
+        let mut a = 0
+        let mut b = 1
+        for i in range(n):
+            let temp = a + b
+            a = b
+            b = temp
+        println(a)
+    return 0

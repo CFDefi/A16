@@ -1,0 +1,132 @@
+###
+Research Assistant Agent
+========================
+A single agent that uses memory and tools to help with research tasks.
+Demonstrates: agent definition, memory, tools, model invocation, token budgeting.
+###
+
+from a16.ai.agent import Agent
+from a16.ai.model import gpt4
+from a16.ai.memory import ShortTermMemory, LongTermMemory
+from a16.ai.tools import web_search, file_read
+from a16.sys.time import now
+
+
+# Output structures
+struct SearchResult:
+    title: Str
+    url: Str
+    snippet: Str
+
+
+struct ResearchSummary:
+    topic: Str
+    key_findings: List[Str]
+    sources: List[Str]
+    confidence: Float
+    follow_up_questions: List[Str]
+
+
+# The Research Assistant Agent
+agent ResearchAssistant:
+    """An intelligent research assistant with persistent memory."""
+    
+    model: gpt4
+    
+    memory: [
+        ShortTermMemory(window=20),
+        LongTermMemory(index_type="hnsw", dimensions=1536)
+    ]
+    
+    tools: [web_search, file_read]
+    budget: tokens=10000, cost=0.50
+    
+    fn __init__(self, name: Str = "Research Assistant"):
+        self.name = name
+        self.research_count = 0
+    
+    async task research(topic: Str) -> ResearchSummary:
+        """Research a topic using web search and memory."""
+        
+        # Check prior knowledge
+        prior = await memory.retrieve(topic, k=5)
+        
+        # Search the web
+        print(f"🔍 Searching for: {topic}")
+        results = await web_search(topic, num_results=10)
+        
+        # Generate summary
+        summary = await model.structured(
+            prompt=p"""
+            Research and summarize: {topic}
+            
+            Prior Knowledge:
+            {self._format_list(prior)}
+            
+            Search Results:
+            {self._format_results(results)}
+            
+            Provide key findings, sources, confidence, and follow-up questions.
+            """,
+            schema=ResearchSummary
+        )
+        
+        # Store in memory
+        await memory.store(
+            content=f"Research on {topic}: {summary.key_findings}",
+            metadata={"type": "research", "topic": topic, "timestamp": now()}
+        )
+        
+        self.research_count += 1
+        return summary
+    
+    async task follow_up(question: Str) -> Str:
+        """Handle follow-up questions using context."""
+        
+        context = await memory.retrieve(question, k=10)
+        
+        response = await model.generate(
+            prompt=p"""
+            Based on our research:
+            {self._format_list(context)}
+            
+            Question: {question}
+            """
+        )
+        
+        await memory.store(f"Q: {question}\nA: {response}")
+        return response
+    
+    fn _format_list(self, items: List[Any]) -> Str:
+        if not items:
+            return "None available"
+        return "\n".join(f"- {item.content}" for item in items)
+    
+    fn _format_results(self, results: List[SearchResult]) -> Str:
+        if not results:
+            return "No results"
+        return "\n".join(f"- {r.title}: {r.snippet}" for r in results)
+
+
+# Standalone execution
+async fn main():
+    let assistant = ResearchAssistant(name="Atlas")
+    
+    print(f"🤖 {assistant.name} initialized")
+    print(f"📊 Token budget: {assistant.budget.tokens}")
+    print()
+    
+    let topic = "latest AI breakthroughs 2024"
+    let summary = await assistant.research(topic)
+    
+    print(f"\n📋 Research: {summary.topic}")
+    print(f"Confidence: {summary.confidence:.0%}")
+    print("\nKey Findings:")
+    for finding in summary.key_findings:
+        print(f"  • {finding}")
+    
+    print(f"\n💰 Tokens used: {assistant.budget.used}")
+
+
+if __name__ == "__main__":
+    run(main())

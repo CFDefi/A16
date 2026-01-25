@@ -1,0 +1,6 @@
+fn main():
+    println("Simple test:")
+    let x = 5
+    let y = 10
+    println(x + y)
+    return 0

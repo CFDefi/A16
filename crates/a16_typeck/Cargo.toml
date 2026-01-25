@@ -1,0 +1,17 @@
+[package]
+name = "a16_typeck"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Type checker for the A16 programming language"
+
+[dependencies]
+a16_ast = { path = "../a16_ast" }
+smol_str.workspace = true
+indexmap.workspace = true
+thiserror.workspace = true
+miette.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+a16_parser = { path = "../a16_parser" }

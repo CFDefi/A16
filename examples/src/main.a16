@@ -1,0 +1,56 @@
+###
+A16 Examples - Main Entry Point
+================================
+Runs all example agents in sequence for demonstration.
+###
+
+from a16.ai.model import gpt4
+from a16.sys.time import now
+
+from .research_assistant import ResearchAssistant
+from .research_team import ResearchTeam
+
+
+async fn main():
+    print("=" * 60)
+    print("        A16 Language Examples")
+    print("=" * 60)
+    print(f"Started at: {now()}")
+    print()
+    
+    # Demo 1: Single Agent
+    print("┌─────────────────────────────────────────────────────┐")
+    print("│  Demo 1: Research Assistant (Single Agent)         │")
+    print("└─────────────────────────────────────────────────────┘")
+    
+    let assistant = ResearchAssistant(name="Atlas")
+    let summary = await assistant.research("quantum computing breakthroughs 2024")
+    
+    print(f"Topic: {summary.topic}")
+    print(f"Confidence: {summary.confidence:.0%}")
+    print("Key Findings:")
+    for finding in summary.key_findings[:3]:
+        print(f"  • {finding}")
+    print()
+    
+    # Demo 2: Multi-Agent Team
+    print("┌─────────────────────────────────────────────────────┐")
+    print("│  Demo 2: Research Team (Multi-Agent)               │")
+    print("└─────────────────────────────────────────────────────┘")
+    
+    let team = ResearchTeam()
+    let result = await team.run("Create a comparison of renewable energy sources")
+    
+    print(f"Team completed with score: {result['execution_critique'].score}/10")
+    print(f"Plan iterations: {result['iterations']}")
+    print()
+    
+    # Summary
+    print("=" * 60)
+    print("        All Demos Complete")
+    print("=" * 60)
+    print(f"Total token usage: {get_token_usage()}")
+
+
+if __name__ == "__main__":
+    run(main())

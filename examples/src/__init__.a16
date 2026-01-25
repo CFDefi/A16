@@ -1,0 +1,24 @@
+###
+A16 Examples Package
+====================
+Example programs demonstrating A16 language capabilities.
+###
+
+# Re-export example agents
+from .research_assistant import ResearchAssistant
+from .research_team import ResearchTeam, Planner, Executor, Critic
+from .data_monitor import DataMonitor
+
+# Package info
+const VERSION = "0.1.0"
+const DESCRIPTION = "A16 example programs"
+
+export [
+    ResearchAssistant,
+    ResearchTeam,
+    Planner,
+    Executor,
+    Critic,
+    DataMonitor,
+    VERSION
+]

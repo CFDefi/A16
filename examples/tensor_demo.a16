@@ -1,0 +1,31 @@
+fn main():
+    println("Tensor Demo")
+    
+    let a = tensor_zeros([2, 3])
+    println("Zeros tensor:")
+    println(a)
+    
+    let b = tensor_ones([2, 3])
+    println("Ones tensor:")
+    println(b)
+    
+    let c = tensor_randn([3, 2])
+    println("Random tensor:")
+    println(c)
+    
+    let d = tensor_add(b, b)
+    println("1 + 1:")
+    println(d)
+    
+    let x = tensor_ones([2, 3])
+    let w = tensor_randn([3, 2])
+    let y = tensor_matmul(x, w)
+    println("Matmul result:")
+    println(y)
+    
+    let z = tensor_relu(tensor_randn([4]))
+    println("ReLU output:")
+    println(z)
+    
+    println("Done!")
+    return 0

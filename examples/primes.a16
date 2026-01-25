@@ -1,0 +1,12 @@
+fn main():
+    println("Prime numbers up to 30:")
+    for num in range(30):
+        let n = num + 2
+        let mut is_prime = True
+        for i in range(n - 2):
+            let divisor = i + 2
+            if n % divisor == 0:
+                is_prime = False
+        if is_prime:
+            println(n)
+    return 0

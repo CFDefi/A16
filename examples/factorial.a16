@@ -1,0 +1,10 @@
+fn main():
+    println("Factorials (iterative):")
+    let mut result = 1
+    for i in range(10):
+        let n = i + 1
+        result = 1
+        for j in range(n):
+            result = result * (j + 1)
+        println(result)
+    return 0

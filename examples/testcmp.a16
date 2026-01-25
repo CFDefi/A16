@@ -1,0 +1,8 @@
+fn main():
+    println("Test loop with inline comparison:")
+    for i in range(5):
+        if i % 2 == 0:
+            println("even")
+        else:
+            println("odd")
+    return 0

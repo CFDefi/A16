@@ -1,0 +1,202 @@
+###
+Autonomous Data Monitor
+=======================
+Event-driven workflow for continuous monitoring.
+Demonstrates: event handling, persistent state, graceful shutdown.
+###
+
+from a16.ai.agent import Agent
+from a16.ai.model import gpt4_mini
+from a16.ai.memory import LongTermMemory, EpisodicMemory
+from a16.ai.tools import web_fetch, email_send, slack_post
+from a16.sys.concurrent import Channel, spawn, select, sleep
+from a16.sys.time import now
+
+
+# Types
+enum EventType:
+    NewData
+    Alert
+    Shutdown
+
+
+struct Event:
+    type: EventType
+    payload: Any
+    timestamp: DateTime
+    source: Str
+
+
+struct Alert:
+    severity: Str  # low, medium, high, critical
+    message: Str
+    data: Any
+
+
+struct WorkflowState:
+    started_at: DateTime
+    events_processed: Int
+    alerts_generated: Int
+    status: Str
+
+
+# The autonomous monitor
+agent DataMonitor:
+    """Continuously monitors data sources and detects anomalies."""
+    
+    model: gpt4_mini
+    
+    memory: [
+        LongTermMemory(capacity=100000),
+        EpisodicMemory(retention=7d, compression="summarize")
+    ]
+    
+    tools: [web_fetch, email_send, slack_post]
+    budget: tokens=50000, cost=10.0
+    
+    # State
+    state: WorkflowState
+    events: Channel[Event]
+    alerts: Channel[Alert]
+    running: Bool = True
+    
+    fn __init__(self, sources: List[Dict]):
+        self.sources = sources
+        self.events = Channel[Event](100)
+        self.alerts = Channel[Alert](50)
+        self.state = WorkflowState(
+            started_at=now(),
+            events_processed=0,
+            alerts_generated=0,
+            status="initializing"
+        )
+    
+    async fn run(self):
+        """Main event loop."""
+        
+        print(f"🚀 DataMonitor started at {self.state.started_at}")
+        self.state.status = "running"
+        
+        # Background tasks
+        spawn self._data_poller()
+        spawn self._alert_handler()
+        
+        # Main loop
+        while self.running:
+            match await select(self.events.receive(), sleep(60s)):
+                case (0, event):
+                    await self._process(event)
+                case (1, _):
+                    await self._maintenance()
+        
+        print(f"🛑 Stopped after {self.state.events_processed} events")
+    
+    async fn _process(self, event: Event):
+        """Process an event."""
+        
+        self.state.events_processed += 1
+        print(f"📥 Event: {event.type} from {event.source}")
+        
+        match event.type:
+            case EventType.NewData:
+                await self._analyze(event)
+            case EventType.Alert:
+                await self.alerts.send(event.payload)
+            case EventType.Shutdown:
+                self.running = False
+    
+    async fn _analyze(self, event: Event):
+        """Analyze data for anomalies."""
+        
+        history = await memory.retrieve(event.source, k=10)
+        
+        analysis = await model.generate(
+            prompt=p"""
+            Analyze for anomalies:
+            Source: {event.source}
+            Data: {event.payload}
+            History: {history}
+            
+            Report any unusual patterns.
+            """
+        )
+        
+        await memory.store(f"{event.source}: {event.payload[:100]}")
+        
+        if "anomaly" in analysis.lower() or "alert" in analysis.lower():
+            await self.alerts.send(Alert(
+                severity="medium",
+                message=analysis,
+                data=event.payload
+            ))
+    
+    async fn _data_poller(self):
+        """Poll data sources periodically."""
+        
+        while self.running:
+            await sleep(5m)
+            
+            for source in self.sources:
+                try:
+                    data = await web_fetch(source["url"])
+                    await self.events.send(Event(
+                        type=EventType.NewData,
+                        payload=data,
+                        timestamp=now(),
+                        source=source["name"]
+                    ))
+                except Exception as e:
+                    print(f"⚠️ Poll failed: {source['name']}: {e}")
+    
+    async fn _alert_handler(self):
+        """Handle alerts."""
+        
+        async for alert in self.alerts:
+            self.state.alerts_generated += 1
+            print(f"🚨 [{alert.severity.upper()}] {alert.message}")
+            
+            if alert.severity == "critical":
+                await email_send(
+                    to="oncall@example.com",
+                    subject=f"CRITICAL: {alert.message}",
+                    body=str(alert.data)
+                )
+    
+    async fn _maintenance(self):
+        """Periodic maintenance."""
+        
+        if self.state.events_processed % 100 == 0:
+            await memory.compress(older_than=7d)
+    
+    fn shutdown(self):
+        """Request graceful shutdown."""
+        spawn self.events.send(Event(
+            type=EventType.Shutdown,
+            payload=None,
+            timestamp=now(),
+            source="system"
+        ))
+
+
+# Configuration
+const SOURCES = [
+    {"name": "api-health", "url": "https://api.example.com/health"},
+    {"name": "metrics", "url": "https://metrics.example.com/data"}
+]
+
+
+# Standalone execution
+async fn main():
+    let monitor = DataMonitor(SOURCES)
+    
+    # Graceful shutdown on signal
+    on_signal(SIGTERM, () => monitor.shutdown())
+    
+    # Run
+    await monitor.run()
+    
+    print(f"\n📊 Final: {monitor.state.events_processed} events, {monitor.state.alerts_generated} alerts")
+
+
+if __name__ == "__main__":
+    run(main())

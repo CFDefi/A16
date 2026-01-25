@@ -1,0 +1,6 @@
+fn main():
+    println("Hello, A16!")
+    let nums = range(5)
+    println(nums)
+    println(len(nums))
+    return 42

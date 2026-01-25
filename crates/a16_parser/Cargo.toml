@@ -1,0 +1,17 @@
+[package]
+name = "a16_parser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Parser for the A16 programming language"
+
+[dependencies]
+a16_lexer = { path = "../a16_lexer" }
+a16_ast = { path = "../a16_ast" }
+smol_str.workspace = true
+thiserror.workspace = true
+miette.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+proptest.workspace = true

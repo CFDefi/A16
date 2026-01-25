@@ -1,0 +1,233 @@
+###
+Multi-Agent Research Team
+=========================
+A coordinated team: Planner, Executor, and Critic.
+Demonstrates: multi-agent coordination, message passing, shared memory.
+###
+
+from a16.ai.agent import Agent, Team
+from a16.ai.model import gpt4, gpt4_mini
+from a16.ai.memory import SharedMemory
+from a16.ai.tools import web_search, code_execute, file_write
+
+
+# Shared structures
+struct TaskPlan:
+    goal: Str
+    steps: List[PlanStep]
+    success_criteria: List[Str]
+
+
+struct PlanStep:
+    id: Int
+    action: Str
+    tool: Optional[Str]
+    dependencies: List[Int]
+
+
+struct ExecutionResult:
+    step_id: Int
+    success: Bool
+    output: Any
+    error: Optional[Str]
+
+
+struct CritiqueReport:
+    approved: Bool
+    score: Float
+    issues: List[Str]
+    suggestions: List[Str]
+    verdict: Str
+
+
+# Agent 1: Planner
+agent Planner:
+    """Creates detailed plans for complex tasks."""
+    
+    model: gpt4
+    memory: [SharedMemory("team")]
+    budget: tokens=3000
+    
+    async task create_plan(goal: Str) -> TaskPlan:
+        """Create an execution plan."""
+        
+        past = await memory.retrieve(f"plan: {goal}", k=3)
+        
+        plan = await model.structured(
+            prompt=p"""
+            Create a detailed plan for: {goal}
+            
+            Past similar plans: {past}
+            
+            Break into clear steps with dependencies.
+            """,
+            schema=TaskPlan
+        )
+        
+        await memory.store(f"plan: {goal} -> {len(plan.steps)} steps")
+        return plan
+    
+    async task revise_plan(original: TaskPlan, feedback: CritiqueReport) -> TaskPlan:
+        """Revise based on feedback."""
+        
+        return await model.structured(
+            prompt=p"""
+            Revise this plan:
+            {original}
+            
+            Issues: {feedback.issues}
+            Suggestions: {feedback.suggestions}
+            """,
+            schema=TaskPlan
+        )
+
+
+# Agent 2: Executor
+agent Executor:
+    """Executes plans step by step."""
+    
+    model: gpt4_mini
+    memory: [SharedMemory("team")]
+    tools: [web_search, code_execute, file_write]
+    budget: tokens=5000
+    
+    async task execute_plan(plan: TaskPlan) -> List[ExecutionResult]:
+        """Execute all steps."""
+        
+        results = []
+        completed = {}
+        
+        for step in plan.steps:
+            # Check dependencies
+            deps_ok = all(completed.get(d, False) for d in step.dependencies)
+            
+            if not deps_ok:
+                results.append(ExecutionResult(step.id, False, None, "Deps not met"))
+                continue
+            
+            result = await self._execute_step(step)
+            results.append(result)
+            completed[step.id] = result.success
+        
+        return results
+    
+    async fn _execute_step(self, step: PlanStep) -> ExecutionResult:
+        try:
+            if step.tool:
+                tool_fn = self.tools[step.tool]
+                output = await tool_fn(step.action)
+            else:
+                output = await model.generate(step.action)
+            
+            return ExecutionResult(step.id, True, output, None)
+        except Exception as e:
+            return ExecutionResult(step.id, False, None, str(e))
+
+
+# Agent 3: Critic
+agent Critic:
+    """Reviews plans and results."""
+    
+    model: gpt4
+    memory: [SharedMemory("team")]
+    budget: tokens=2000
+    
+    async task review_plan(plan: TaskPlan, goal: Str) -> CritiqueReport:
+        """Review a plan."""
+        
+        return await model.structured(
+            prompt=p"""
+            Review this plan for goal: {goal}
+            
+            Steps: {len(plan.steps)}
+            {plan}
+            
+            Evaluate completeness, feasibility, efficiency.
+            Score 1-10.
+            """,
+            schema=CritiqueReport
+        )
+    
+    async task review_execution(results: List[ExecutionResult], goal: Str) -> CritiqueReport:
+        """Review execution results."""
+        
+        success_rate = sum(1 for r in results if r.success) / len(results)
+        
+        return await model.structured(
+            prompt=p"""
+            Review execution for: {goal}
+            Success rate: {success_rate:.0%}
+            
+            Results: {results}
+            
+            Did it achieve the goal?
+            """,
+            schema=CritiqueReport
+        )
+
+
+# Team Coordinator
+team ResearchTeam:
+    """Coordinated Planner/Executor/Critic team."""
+    
+    agents: [Planner, Executor, Critic]
+    memory: SharedMemory("team")
+    max_iterations: 3
+    
+    async fn run(goal: Str) -> Dict:
+        """Execute goal with full team."""
+        
+        print(f"🎯 Goal: {goal}")
+        
+        # Plan
+        print("\n📋 Planning...")
+        plan = await Planner.create_plan(goal)
+        
+        # Review plan
+        print("🔍 Reviewing plan...")
+        critique = await Critic.review_plan(plan, goal)
+        print(f"Score: {critique.score}/10")
+        
+        # Iterate if needed
+        iteration = 0
+        while not critique.approved and iteration < self.max_iterations:
+            print(f"🔄 Revising (iteration {iteration + 1})...")
+            plan = await Planner.revise_plan(plan, critique)
+            critique = await Critic.review_plan(plan, goal)
+            iteration += 1
+        
+        # Execute
+        print("\n⚡ Executing...")
+        results = await Executor.execute_plan(plan)
+        success = sum(1 for r in results if r.success)
+        print(f"Completed: {success}/{len(results)}")
+        
+        # Final review
+        print("\n📊 Final review...")
+        final = await Critic.review_execution(results, goal)
+        print(f"Verdict: {final.verdict}")
+        
+        return {
+            "goal": goal,
+            "plan": plan,
+            "results": results,
+            "plan_critique": critique,
+            "execution_critique": final,
+            "iterations": iteration + 1
+        }
+
+
+# Standalone execution
+async fn main():
+    let team = ResearchTeam()
+    
+    let goal = "Research and summarize top 3 programming languages for AI"
+    let result = await team.run(goal)
+    
+    print("\n" + "=" * 50)
+    print(f"✅ Complete!")
+    print(f"Score: {result['execution_critique'].score}/10")
+
+
+if __name__ == "__main__":
+    run(main())

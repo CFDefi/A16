@@ -1,0 +1,62 @@
+[package]
+name = "a16-examples"
+version = "0.1.0"
+description = "A16 example programs demonstrating language capabilities"
+authors = ["A16 Team"]
+license = "MIT"
+
+# Minimum A16 version required
+a16 = ">=0.1.0"
+
+[dependencies]
+# No external dependencies for examples
+
+[dev-dependencies]
+a16-test = "^0.1.0"
+
+[build]
+entry = "src/main.a16"
+
+[runtime]
+workers = "auto"
+memory_limit = "4GB"
+token_budget = 50000
+model_default = "gpt-4o"
+
+[models]
+[models.gpt4]
+provider = "openai"
+model = "gpt-4o"
+api_key_env = "OPENAI_API_KEY"
+
+[models.gpt4_mini]
+provider = "openai"
+model = "gpt-4o-mini"
+api_key_env = "OPENAI_API_KEY"
+
+[models.claude]
+provider = "anthropic"
+model = "claude-3-5-sonnet"
+api_key_env = "ANTHROPIC_API_KEY"
+
+[memory]
+backend = "sqlite"
+path = ".a16/memory"
+vector_dimensions = 1536
+
+[logging]
+level = "info"
+format = "json"
+output = "stdout"
+
+[security]
+allow_network = true
+allow_filesystem = true
+sandbox_level = "light"
+
+[scripts]
+dev = "a16 run --watch src/main.a16"
+test = "a16 test tests/"
+research = "a16 run src/research_assistant.a16"
+team = "a16 run src/research_team.a16"
+monitor = "a16 run src/data_monitor.a16"

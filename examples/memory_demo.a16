@@ -1,0 +1,34 @@
+fn main():
+    println("Memory Demo")
+    
+    let vec1 = embed("hello world")
+    let vec2 = embed("goodbye world")
+    let vec3 = embed("hello there")
+    
+    println("Embedding 1:")
+    println(vec1)
+    println("Embedding 2:")
+    println(vec2)
+    println("Embedding 3:")
+    println(vec3)
+    
+    let mem = memory_new(64)
+    println("Memory index:")
+    println(mem)
+    
+    memory_store(mem, vec1)
+    memory_store(mem, vec2)
+    memory_store(mem, vec3)
+    println("Stored 3 vectors")
+    
+    let query = embed("hi world")
+    let results = memory_retrieve(mem, query)
+    println("Search results (similarity scores):")
+    println(results)
+    
+    let size = memory_retrieve(mem, 0)
+    println("Memory size:")
+    println(size)
+    
+    println("Done!")
+    return 0

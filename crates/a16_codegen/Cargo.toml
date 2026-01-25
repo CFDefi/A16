@@ -1,0 +1,15 @@
+[package]
+name = "a16_codegen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bytecode compiler for A16"
+
+[dependencies]
+a16_hir = { path = "../a16_hir" }
+smol_str.workspace = true
+indexmap.workspace = true
+
+[dev-dependencies]
+a16_parser = { path = "../a16_parser" }
+a16_hir = { path = "../a16_hir" }

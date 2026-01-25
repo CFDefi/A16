@@ -1,0 +1,11 @@
+[package]
+name = "a16_vector"
+version = "0.1.0"
+edition = "2021"
+description = "A16 Vector Index and Embedding Engine"
+
+[dependencies]
+smol_str = "0.2"
+rand = "0.8"
+
+[dev-dependencies]

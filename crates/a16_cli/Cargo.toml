@@ -1,0 +1,25 @@
+[package]
+name = "a16_cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Command-line interface for the A16 programming language"
+
+[[bin]]
+name = "a16"
+path = "src/main.rs"
+
+[dependencies]
+a16_lexer = { path = "../a16_lexer" }
+a16_ast = { path = "../a16_ast" }
+a16_parser = { path = "../a16_parser" }
+a16_typeck = { path = "../a16_typeck" }
+a16_hir = { path = "../a16_hir" }
+a16_codegen = { path = "../a16_codegen" }
+a16_vm = { path = "../a16_vm" }
+
+clap.workspace = true
+colored.workspace = true
+tokio.workspace = true
+miette.workspace = true
+anyhow.workspace = true
