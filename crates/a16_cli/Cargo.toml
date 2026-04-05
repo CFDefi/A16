@@ -17,6 +17,9 @@ a16_typeck = { path = "../a16_typeck" }
 a16_hir = { path = "../a16_hir" }
 a16_codegen = { path = "../a16_codegen" }
 a16_vm = { path = "../a16_vm" }
+a16_fmt = { path = "../a16_fmt" }
+a16_lint = { path = "../a16_lint" }
+a16_doc = { path = "../a16_doc" }
 
 clap.workspace = true
 colored.workspace = true

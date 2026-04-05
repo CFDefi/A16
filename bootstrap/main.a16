@@ -1,0 +1,69 @@
+# A16 Bootstrap Compiler — Main Entry Point
+#
+# This program implements an A16 compiler in A16 itself.
+# It tokenizes, parses, compiles, and executes a simple A16 program.
+
+# =========================================================================
+# Test Program (compiled and executed by the bootstrap compiler)
+# =========================================================================
+fn main():
+    println("╔══════════════════════════════════════╗")
+    println("║  A16 Self-Hosting Bootstrap Compiler ║")
+    println("╚══════════════════════════════════════╝")
+    println("")
+
+    # The source code to compile (a simple A16 program)
+    let test_source = "fn add(a, b):\n    return a + b\n\nfn factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n - 1)\n\nfn main():\n    println(add(2, 3))\n    println(factorial(5))\n    println(\"Hello from bootstrap!\")\n"
+
+    println("Source program:")
+    println("───────────────")
+    println(test_source)
+    println("───────────────")
+    println("")
+
+    # Phase 1: Tokenize
+    println("Phase 1: Lexing...")
+    let tokens = tokenize(test_source)
+    println("  Tokens generated: " + str(len(tokens)))
+
+    # Display first few tokens
+    let i = 0
+    while i < len(tokens) and i < 10:
+        let tok = tokens[i]
+        println("  [" + token_name(tok[0]) + "] '" + tok[1] + "'")
+        i = i + 1
+    if len(tokens) > 10:
+        println("  ... (" + str(len(tokens) - 10) + " more)")
+    println("")
+
+    # Phase 2: Parse
+    println("Phase 2: Parsing...")
+    let ast = parse(tokens)
+    let items = ast[1]
+    println("  AST items: " + str(len(items)))
+    for item in items:
+        if item[0] == "func":
+            println("  fn " + item[1] + "(" + str(len(item[2])) + " params)")
+    println("")
+
+    # Phase 3: Compile
+    println("Phase 3: Compiling...")
+    let compiled = compile(ast)
+    println("  Instructions: " + str(len(compiled["code"])))
+    println("  Constants: " + str(len(compiled["constants"])))
+    println("  Functions: " + str(len(compiled["functions"])))
+    for func in compiled["functions"]:
+        println("  fn " + func[0] + " @ ip=" + str(func[1]))
+    println("")
+
+    # Phase 4: Execute
+    println("Phase 4: Executing...")
+    println("═══════════════════")
+    let vm = make_vm(compiled)
+    let result = run(vm, "main")
+    println("═══════════════════")
+    println("")
+    println("Bootstrap complete!")
+    println("Result: " + str(result))
+
+    return 0

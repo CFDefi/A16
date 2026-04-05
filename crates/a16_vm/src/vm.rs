@@ -1,10 +1,10 @@
-//! Virtual Machine Implementation
-
 use a16_codegen::{BytecodeModule, Constant, Opcode};
 use smol_str::SmolStr;
 use indexmap::IndexMap;
 use std::rc::Rc;
 use std::cell::RefCell;
+use a16_runtime::{Executor, Channel};
+use a16_ffi::FfiRegistry;
 
 use crate::value::{Value, ValueIterator};
 
@@ -14,6 +14,8 @@ struct CallFrame {
     func_idx: u16,
     ip: usize,
     base: usize,
+    /// Captured upvalues for closures (empty for regular functions)
+    upvalues: Vec<Value>,
 }
 
 /// A16 Virtual Machine
@@ -22,6 +24,14 @@ pub struct VM {
     frames: Vec<CallFrame>,
     globals: IndexMap<SmolStr, Value>,
     module: BytecodeModule,
+    /// Async task executor
+    executor: Executor,
+    /// Stored results for eagerly-evaluated spawned tasks
+    task_results: IndexMap<u64, Value>,
+    /// Next task result ID
+    next_task_id: u64,
+    /// FFI function registry
+    ffi_registry: FfiRegistry,
 }
 
 /// VM execution result
@@ -74,6 +84,10 @@ impl VM {
             frames: Vec::with_capacity(64),
             globals,
             module,
+            executor: Executor::new(),
+            task_results: IndexMap::new(),
+            next_task_id: 1,
+            ffi_registry: FfiRegistry::new(),
         }
     }
     
@@ -88,8 +102,12 @@ impl VM {
         self.execute()
     }
     
-    /// Call a function with arguments already on stack
     fn call_function(&mut self, func_idx: u16, argc: u8) -> VMResult<()> {
+        self.call_function_with_upvalues(func_idx, argc, Vec::new())
+    }
+    
+    /// Call a function with arguments already on stack, with optional upvalues
+    fn call_function_with_upvalues(&mut self, func_idx: u16, argc: u8, upvalues: Vec<Value>) -> VMResult<()> {
         let func = &self.module.functions[func_idx as usize];
         
         if argc != func.arity {
@@ -112,6 +130,7 @@ impl VM {
             func_idx,
             ip: 0,
             base,
+            upvalues,
         });
         
         Ok(())
@@ -351,6 +370,11 @@ impl VM {
                             self.stack.remove(self.stack.len() - 1 - argc as usize);
                             self.call_function(idx, argc)?;
                         }
+                        Value::Closure { func_idx, upvalues } => {
+                            // Remove callee from stack
+                            self.stack.remove(self.stack.len() - 1 - argc as usize);
+                            self.call_function_with_upvalues(func_idx, argc, upvalues)?;
+                        }
                         Value::NativeFunc(nf) => {
                             if argc != nf.arity {
                                 return Err(VMError::WrongArgCount {
@@ -536,13 +560,253 @@ impl VM {
                     self.stack.push(Value::List(Rc::new(RefCell::new(vec![]))));
                 }
                 
-                // Async (stubs)
+                // Async Runtime
                 Some(Opcode::Await) => {
-                    // For now, just leave value as-is
+                    // Resolve a Future: if TOS is Future(id), replace with stored result
+                    let val = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                    match val {
+                        Value::Future(task_id) => {
+                            // Look up the eagerly-computed result
+                            let result = self.task_results.get(&task_id)
+                                .cloned()
+                                .unwrap_or(Value::None);
+                            self.stack.push(result);
+                        }
+                        other => {
+                            // Not a future — pass through (already resolved)
+                            self.stack.push(other);
+                        }
+                    }
                 }
                 
                 Some(Opcode::Spawn) => {
-                    // For now, just leave value as-is
+                    // Legacy spawn: eagerly execute the function call on TOS
+                    // The callee should already be on the stack
+                    let val = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                    match val {
+                        Value::Function(idx) => {
+                            // Eagerly execute: call function, get result, wrap in Future
+                            let task_id = self.next_task_id;
+                            self.next_task_id += 1;
+                            
+                            // Execute synchronously (simplified eager model)
+                            self.call_function(idx, 0)?;
+                            let result = self.execute_to_return()?;
+                            self.task_results.insert(task_id, result);
+                            self.stack.push(Value::Future(task_id));
+                        }
+                        other => {
+                            // Not callable — just wrap the value
+                            let task_id = self.next_task_id;
+                            self.next_task_id += 1;
+                            self.task_results.insert(task_id, other);
+                            self.stack.push(Value::Future(task_id));
+                        }
+                    }
+                }
+                
+                Some(Opcode::SpawnTask) => {
+                    // Spawn a function as a concurrent task
+                    // Reads: u16 func_idx, u8 argc
+                    let func_idx = self.read_u16()?;
+                    let argc = self.read_u8()?;
+                    
+                    let task_id = self.next_task_id;
+                    self.next_task_id += 1;
+                    
+                    // Collect arguments from stack
+                    let args: Vec<Value> = if argc > 0 {
+                        self.stack.drain(self.stack.len() - argc as usize..).collect()
+                    } else {
+                        Vec::new()
+                    };
+                    
+                    // Push args back, call function, execute eagerly
+                    for arg in args {
+                        self.stack.push(arg);
+                    }
+                    self.call_function(func_idx, argc)?;
+                    let result = self.execute_to_return()?;
+                    self.task_results.insert(task_id, result);
+                    
+                    // Also register with executor for tracking
+                    self.executor.spawn(SmolStr::new(format!("task_{}", task_id)), func_idx);
+                    
+                    self.stack.push(Value::Future(task_id));
+                }
+                
+                Some(Opcode::JoinAll) => {
+                    // Wait for N futures, push results as a list
+                    let count = self.read_u8()? as usize;
+                    let start = self.stack.len() - count;
+                    let futures: Vec<Value> = self.stack.drain(start..).collect();
+                    
+                    let mut results = Vec::with_capacity(count);
+                    for future in futures {
+                        match future {
+                            Value::Future(task_id) => {
+                                let result = self.task_results.get(&task_id)
+                                    .cloned()
+                                    .unwrap_or(Value::None);
+                                results.push(result);
+                            }
+                            other => results.push(other),
+                        }
+                    }
+                    
+                    self.stack.push(Value::List(Rc::new(RefCell::new(results))));
+                }
+                
+                Some(Opcode::Yield) => {
+                    // Cooperative yield point — no-op in single-task mode
+                    // In a full async runtime, this would suspend the current task
+                }
+                
+                Some(Opcode::ChannelCreate) => {
+                    // Create a bounded channel
+                    let capacity = self.read_u16()? as usize;
+                    let ch_id = self.next_task_id;
+                    self.next_task_id += 1;
+                    let ch = Channel::new(
+                        SmolStr::new(format!("ch_{}", ch_id)),
+                        capacity,
+                    );
+                    self.stack.push(Value::Channel(Rc::new(RefCell::new(ch))));
+                }
+                
+                Some(Opcode::ChannelSend) => {
+                    // Stack: [channel, value] -> []
+                    let val = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                    let ch_val = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                    
+                    match ch_val {
+                        Value::Channel(ch) => {
+                            let msg = a16_runtime::ChannelMessage::Text(
+                                SmolStr::new(format!("{}", val))
+                            );
+                            ch.borrow_mut().send(msg)
+                                .map_err(|e| VMError::TypeError(format!("Channel send failed: {}", e)))?;
+                            self.stack.push(Value::None);
+                        }
+                        _ => return Err(VMError::TypeError("Expected channel".into())),
+                    }
+                }
+                
+                Some(Opcode::ChannelRecv) => {
+                    // Stack: [channel] -> [value]
+                    let ch_val = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                    
+                    match ch_val {
+                        Value::Channel(ch) => {
+                            match ch.borrow_mut().recv() {
+                                Ok(msg) => {
+                                    let val = match msg {
+                                        a16_runtime::ChannelMessage::Text(s) => Value::Str(s),
+                                        a16_runtime::ChannelMessage::ValueId(id) => {
+                                            self.task_results.get(&id)
+                                                .cloned()
+                                                .unwrap_or(Value::None)
+                                        }
+                                    };
+                                    self.stack.push(val);
+                                }
+                                Err(_) => {
+                                    self.stack.push(Value::None);
+                                }
+                            }
+                        }
+                        _ => return Err(VMError::TypeError("Expected channel".into())),
+                    }
+                }
+                
+                // FFI
+                Some(Opcode::FfiCall) => {
+                    let ffi_idx = self.read_u16()?;
+                    let argc = self.read_u8()?;
+                    
+                    // Collect arguments from stack
+                    let start = self.stack.len() - argc as usize;
+                    let args: Vec<Value> = self.stack.drain(start..).collect();
+                    
+                    // Marshal args to FFI values
+                    let ffi_args: Vec<a16_ffi::FfiValue> = args.iter().map(|v| match v {
+                        Value::Int(n) => a16_ffi::FfiValue::Int(*n),
+                        Value::Float(f) => a16_ffi::FfiValue::Float(*f),
+                        Value::Bool(b) => a16_ffi::FfiValue::Bool(*b),
+                        Value::Str(s) => a16_ffi::FfiValue::Str(s.clone()),
+                        Value::None => a16_ffi::FfiValue::Void,
+                        _ => a16_ffi::FfiValue::Str(SmolStr::new(format!("{}", v))),
+                    }).collect();
+                    
+                    // Call through registry
+                    match self.ffi_registry.call_by_index(ffi_idx, &ffi_args) {
+                        Ok(result) => {
+                            let val = match result {
+                                a16_ffi::FfiValue::Int(n) => Value::Int(n),
+                                a16_ffi::FfiValue::UInt(n) => Value::Int(n as i64),
+                                a16_ffi::FfiValue::Float(f) => Value::Float(f),
+                                a16_ffi::FfiValue::Bool(b) => Value::Bool(b),
+                                a16_ffi::FfiValue::Str(s) => Value::Str(s),
+                                a16_ffi::FfiValue::Void => Value::None,
+                                a16_ffi::FfiValue::Pointer(p) => Value::Int(p as i64),
+                            };
+                            self.stack.push(val);
+                        }
+                        Err(e) => {
+                            return Err(VMError::TypeError(format!("FFI call failed: {}", e)));
+                        }
+                    }
+                }
+                
+                Some(Opcode::FfiLoad) => {
+                    let lib_name_idx = self.read_u16()?;
+                    let lib_name = self.get_string_constant(lib_name_idx);
+                    self.ffi_registry.register_library(lib_name.as_str(), None)
+                        .map_err(|e| VMError::TypeError(format!("FFI load failed: {}", e)))?;
+                    self.stack.push(Value::Bool(true));
+                }
+                
+                // Closures
+                Some(Opcode::MakeClosure) => {
+                    let func_idx = self.read_u16()?;
+                    let upvalue_count = self.read_u8()?;
+                    let mut upvalues = Vec::with_capacity(upvalue_count as usize);
+                    
+                    for _ in 0..upvalue_count {
+                        let is_local = self.read_u8()? != 0;
+                        let index = self.read_u8()?;
+                        
+                        let val = if is_local {
+                            // Capture from current frame's locals
+                            let frame = self.frames.last().unwrap();
+                            self.stack[frame.base + index as usize].clone()
+                        } else {
+                            // Capture from enclosing closure's upvalues
+                            let frame = self.frames.last().unwrap();
+                            frame.upvalues.get(index as usize).cloned().unwrap_or(Value::None)
+                        };
+                        upvalues.push(val);
+                    }
+                    
+                    self.stack.push(Value::Closure { func_idx, upvalues });
+                }
+                
+                Some(Opcode::GetUpvalue) => {
+                    let index = self.read_u8()?;
+                    let frame = self.frames.last().unwrap();
+                    let val = frame.upvalues.get(index as usize)
+                        .cloned()
+                        .unwrap_or(Value::None);
+                    self.stack.push(val);
+                }
+                
+                Some(Opcode::SetUpvalue) => {
+                    let index = self.read_u8()?;
+                    let val = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                    let frame = self.frames.last_mut().unwrap();
+                    if (index as usize) < frame.upvalues.len() {
+                        frame.upvalues[index as usize] = val;
+                    }
                 }
                 
                 Some(Opcode::Halt) => {
@@ -553,7 +817,58 @@ impl VM {
             }
         }
     }
-    
+    /// Execute until the current call frame returns.
+    /// Used by spawn/spawn_task for eager execution of tasks.
+    fn execute_to_return(&mut self) -> VMResult<Value> {
+        let target_depth = self.frames.len() - 1;
+        loop {
+            if self.frames.len() <= target_depth {
+                // The spawned frame has returned
+                return Ok(self.stack.pop().unwrap_or(Value::None));
+            }
+
+            let frame = self.frames.last_mut().unwrap();
+            let func = &self.module.functions[frame.func_idx as usize];
+
+            if frame.ip >= func.code.len() {
+                // Implicit return None
+                self.stack.push(Value::None);
+                let old_frame = self.frames.pop().unwrap();
+                self.stack.truncate(old_frame.base);
+                self.stack.push(Value::None);
+                continue;
+            }
+
+            let opcode = func.code[frame.ip];
+            frame.ip += 1;
+
+            // Handle Return specially to check depth
+            if let Some(Opcode::Return) = Opcode::from_u8(opcode) {
+                let result = self.stack.pop().ok_or(VMError::StackUnderflow)?;
+                let old_frame = self.frames.pop().unwrap();
+                self.stack.truncate(old_frame.base);
+                self.stack.push(result.clone());
+
+                if self.frames.len() <= target_depth {
+                    return Ok(result);
+                }
+                continue;
+            }
+
+            // Re-process through execute. We need to put IP back and call execute once.
+            // Simpler approach: just run the full execute loop but break on depth check
+            let frame = self.frames.last_mut().unwrap();
+            frame.ip -= 1; // put opcode back
+            
+            // Single-step: execute one instruction via the main loop
+            // We re-enter execute which will process one opcode and return here
+            break;
+        }
+
+        // Fallback: run the full execute loop  
+        self.execute()
+    }
+
     fn read_u8(&mut self) -> VMResult<u8> {
         let frame = self.frames.last_mut().unwrap();
         let func = &self.module.functions[frame.func_idx as usize];

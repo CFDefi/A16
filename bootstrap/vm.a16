@@ -1,0 +1,317 @@
+# A16 Bootstrap Virtual Machine
+# Stack-based interpreter executing bootstrap bytecode.
+
+# =========================================================================
+# VM State
+# =========================================================================
+fn make_vm(compiled: Dict) -> Dict:
+    return {
+        "code": compiled["code"],
+        "constants": compiled["constants"],
+        "functions": compiled["functions"],
+        "stack": [],
+        "locals": [],
+        "ip": 0,
+        "call_stack": [],
+        "halted": False
+    }
+
+fn push(vm: Dict, value):
+    append(vm["stack"], value)
+
+fn pop(vm: Dict):
+    let stack = vm["stack"]
+    let idx = len(stack) - 1
+    let val = stack[idx]
+    # Remove last element
+    let new_stack = []
+    let i = 0
+    while i < idx:
+        append(new_stack, stack[i])
+        i = i + 1
+    vm["stack"] = new_stack
+    return val
+
+fn stack_top(vm: Dict):
+    return vm["stack"][len(vm["stack"]) - 1]
+
+# Find function by name
+fn find_function(vm: Dict, name: Str) -> List:
+    for func in vm["functions"]:
+        if func[0] == name:
+            return func
+    return None
+
+# =========================================================================
+# Execution
+# =========================================================================
+fn run(vm: Dict, entry_name: Str):
+    let func = find_function(vm, entry_name)
+    if func == None:
+        println("Error: function '" + entry_name + "' not found")
+        return None
+
+    vm["ip"] = func[1]
+
+    while not vm["halted"] and vm["ip"] < len(vm["code"]):
+        let instr = vm["code"][vm["ip"]]
+        let op = instr[0]
+        vm["ip"] = vm["ip"] + 1
+
+        execute_op(vm, op, instr)
+
+    if len(vm["stack"]) > 0:
+        return pop(vm)
+    return None
+
+fn execute_op(vm: Dict, op: Int, instr: List):
+    # Load constant
+    if op == 1:
+        push(vm, vm["constants"][instr[1]])
+        return
+
+    # Load local
+    if op == 2:
+        push(vm, vm["locals"][instr[1]])
+        return
+
+    # Store local
+    if op == 3:
+        let val = pop(vm)
+        let idx = instr[1]
+        while len(vm["locals"]) <= idx:
+            append(vm["locals"], None)
+        vm["locals"][idx] = val
+        return
+
+    # Load global (used for function references)
+    if op == 4:
+        let name = vm["constants"][instr[1]]
+        push(vm, name)
+        return
+
+    # Store global
+    if op == 5:
+        pop(vm)
+        return
+
+    # Arithmetic
+    if op == 10:
+        let b = pop(vm)
+        let a = pop(vm)
+        if type(a) == "Str":
+            push(vm, str(a) + str(b))
+        else:
+            push(vm, a + b)
+        return
+
+    if op == 11:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a - b)
+        return
+
+    if op == 12:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a * b)
+        return
+
+    if op == 13:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a / b)
+        return
+
+    if op == 14:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a % b)
+        return
+
+    if op == 15:
+        let a = pop(vm)
+        push(vm, 0 - a)
+        return
+
+    if op == 16:
+        let a = pop(vm)
+        push(vm, not a)
+        return
+
+    # Comparisons
+    if op == 20:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a == b)
+        return
+
+    if op == 21:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a != b)
+        return
+
+    if op == 22:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a < b)
+        return
+
+    if op == 23:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a > b)
+        return
+
+    if op == 24:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a <= b)
+        return
+
+    if op == 25:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a >= b)
+        return
+
+    if op == 26:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a and b)
+        return
+
+    if op == 27:
+        let b = pop(vm)
+        let a = pop(vm)
+        push(vm, a or b)
+        return
+
+    # Control flow
+    if op == 30:
+        vm["ip"] = instr[1]
+        return
+
+    if op == 31:
+        let cond = pop(vm)
+        if not cond:
+            vm["ip"] = instr[1]
+        return
+
+    # Function call
+    if op == 40:
+        let argc = instr[1]
+        let func_name = pop(vm)
+        let func = find_function(vm, func_name)
+        if func == None:
+            println("Error: undefined function '" + str(func_name) + "'")
+            return
+
+        # Save call frame
+        append(vm["call_stack"], [vm["ip"], vm["locals"]])
+        vm["locals"] = []
+
+        # Pop args in reverse and assign to locals
+        let args = []
+        let i = 0
+        while i < argc:
+            append(args, pop(vm))
+            i = i + 1
+
+        # Reverse args
+        let j = len(args) - 1
+        while j >= 0:
+            append(vm["locals"], args[j])
+            j = j - 1
+
+        vm["ip"] = func[1]
+        return
+
+    # Return with value
+    if op == 41:
+        let ret_val = pop(vm)
+        if len(vm["call_stack"]) > 0:
+            let frame = vm["call_stack"][len(vm["call_stack"]) - 1]
+            # Pop call stack
+            let new_cs = []
+            let k = 0
+            while k < len(vm["call_stack"]) - 1:
+                append(new_cs, vm["call_stack"][k])
+                k = k + 1
+            vm["call_stack"] = new_cs
+            vm["ip"] = frame[0]
+            vm["locals"] = frame[1]
+            push(vm, ret_val)
+        else:
+            push(vm, ret_val)
+            vm["halted"] = True
+        return
+
+    # Return None
+    if op == 42:
+        if len(vm["call_stack"]) > 0:
+            let frame = vm["call_stack"][len(vm["call_stack"]) - 1]
+            let new_cs = []
+            let k = 0
+            while k < len(vm["call_stack"]) - 1:
+                append(new_cs, vm["call_stack"][k])
+                k = k + 1
+            vm["call_stack"] = new_cs
+            vm["ip"] = frame[0]
+            vm["locals"] = frame[1]
+            push(vm, None)
+        else:
+            vm["halted"] = True
+        return
+
+    # Pop
+    if op == 50:
+        pop(vm)
+        return
+
+    # Dup
+    if op == 51:
+        push(vm, stack_top(vm))
+        return
+
+    # Make list
+    if op == 60:
+        let count = instr[1]
+        let items = []
+        let i = 0
+        while i < count:
+            append(items, pop(vm))
+            i = i + 1
+        # Reverse
+        let result = []
+        let j = len(items) - 1
+        while j >= 0:
+            append(result, items[j])
+            j = j - 1
+        push(vm, result)
+        return
+
+    # Subscript
+    if op == 61:
+        let index = pop(vm)
+        let obj = pop(vm)
+        push(vm, obj[index])
+        return
+
+    # Print
+    if op == 70:
+        let val = pop(vm)
+        print(str(val))
+        return
+
+    # Println
+    if op == 71:
+        let val = pop(vm)
+        println(str(val))
+        return
+
+    # Halt
+    if op == 99:
+        vm["halted"] = True
+        return

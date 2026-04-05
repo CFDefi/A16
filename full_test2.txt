@@ -1,0 +1,106 @@
+﻿cargo :    Compiling 
+proc-macro2 v1.0.105
+At line:1 char:19
++ cargo clean 2>&1; cargo 
+test --workspace 2>&1 | 
+Out-File -FilePath C: ...
++                   ~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (   
+    Compiling proc-macr   
+ o2 v1.0.105:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+   Compiling 
+unicode-ident v1.0.22
+   Compiling quote v1.0.43
+   Compiling cfg-if v1.0.4
+   Compiling windows-link 
+v0.2.1
+   Compiling smol_str 
+v0.2.2
+   Compiling thiserror 
+v1.0.69
+   Compiling zerocopy 
+v0.8.33
+   Compiling regex-syntax 
+v0.8.8
+   Compiling 
+windows_x86_64_msvc 
+v0.53.1
+   Compiling equivalent 
+v1.0.2
+   Compiling hashbrown 
+v0.16.1
+   Compiling fnv v1.0.7
+   Compiling lazy_static 
+v1.5.0
+   Compiling getrandom 
+v0.3.4
+   Compiling beef v0.5.2
+   Compiling windows-sys 
+v0.61.2
+   Compiling 
+windows_x86_64_msvc 
+v0.52.6
+   Compiling once_cell 
+v1.21.3
+   Compiling owo-colors 
+v4.2.3
+   Compiling 
+rustc-demangle v0.1.27
+   Compiling is_ci v1.2.0
+   Compiling a16_ast 
+v0.1.0 (C:\Users\vanfo\Doc
+uments\A16\crates\a16_ast)
+   Compiling 
+unicode-linebreak v0.1.5
+   Compiling 
+unicode-width v0.2.2
+   Compiling 
+supports-color v3.0.2
+   Compiling backtrace 
+v0.3.76
+   Compiling 
+unicode-width v0.1.14
+   Compiling indexmap 
+v2.13.0
+error: failed to run 
+custom build command for 
+`quote v1.0.43`
+
+Caused by:
+  could not execute 
+process `C:\Users\vanfo\Do
+cuments\A16\target\debug\b
+uild\quote-b9f59e07358033b
+7\build-script-build` 
+(never executed)
+
+Caused by:
+  An Application Control 
+policy has blocked this 
+file. (os error 4551)
+warning: build failed, 
+waiting for other jobs to 
+finish...
+error: failed to run 
+custom build command for 
+`proc-macro2 v1.0.105`
+
+Caused by:
+  could not execute 
+process `C:\Users\vanfo\Do
+cuments\A16\target\debug\b
+uild\proc-macro2-4d931384b
+79820b1\build-script-build
+` (never executed)
+
+Caused by:
+  An Application Control 
+policy has blocked this 
+file. (os error 4551)

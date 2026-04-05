@@ -6,7 +6,9 @@ use std::cell::RefCell;
 use indexmap::IndexMap;
 
 use crate::value::{Value, NativeFunc};
-use a16_tensor::Tensor;
+use crate::agent::{AgentRuntime, ModelHandle};
+use crate::tool_registry::ToolRegistry;
+use a16_tensor::{Tensor, MLP, Activation};
 use a16_vector::{HNSWIndex, Embedder, TfIdfEmbedder};
 
 /// Register all standard library functions
@@ -272,6 +274,167 @@ pub fn register_stdlib() -> IndexMap<SmolStr, Value> {
         name: SmolStr::new("memory_retrieve"),
         arity: 2,
         func: native_memory_retrieve,
+    }));
+    
+    // ===============================
+    // M8: Agent & Model Functions
+    // ===============================
+    
+    globals.insert(SmolStr::new("agent_create"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("agent_create"),
+        arity: 2,
+        func: native_agent_create,
+    }));
+    
+    globals.insert(SmolStr::new("agent_run"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("agent_run"),
+        arity: 1,
+        func: native_agent_run,
+    }));
+    
+    globals.insert(SmolStr::new("agent_step"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("agent_step"),
+        arity: 1,
+        func: native_agent_step,
+    }));
+    
+    globals.insert(SmolStr::new("agent_status"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("agent_status"),
+        arity: 1,
+        func: native_agent_status,
+    }));
+    
+    globals.insert(SmolStr::new("model_create"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("model_create"),
+        arity: 1,
+        func: native_model_create,
+    }));
+    
+    globals.insert(SmolStr::new("model_generate"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("model_generate"),
+        arity: 2,
+        func: native_model_generate,
+    }));
+    
+    globals.insert(SmolStr::new("tool_list"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("tool_list"),
+        arity: 0,
+        func: native_tool_list,
+    }));
+    
+    globals.insert(SmolStr::new("tool_call"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("tool_call"),
+        arity: 2,
+        func: native_tool_call,
+    }));
+    
+    globals.insert(SmolStr::new("mlp_create"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("mlp_create"),
+        arity: 2,
+        func: native_mlp_create,
+    }));
+    
+    globals.insert(SmolStr::new("mlp_forward"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("mlp_forward"),
+        arity: 2,
+        func: native_mlp_forward,
+    }));
+    
+    globals.insert(SmolStr::new("mlp_train_step"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("mlp_train_step"),
+        arity: 2,
+        func: native_mlp_train_step,
+    }));
+    // ===============================
+    // M11: Async & Concurrency Functions
+    // ===============================
+    
+    globals.insert(SmolStr::new("channel_create"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("channel_create"),
+        arity: 1,
+        func: native_channel_create,
+    }));
+    
+    globals.insert(SmolStr::new("channel_send"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("channel_send"),
+        arity: 2,
+        func: native_channel_send,
+    }));
+    
+    globals.insert(SmolStr::new("channel_recv"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("channel_recv"),
+        arity: 1,
+        func: native_channel_recv,
+    }));
+    
+    globals.insert(SmolStr::new("channel_close"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("channel_close"),
+        arity: 1,
+        func: native_channel_close,
+    }));
+    
+    globals.insert(SmolStr::new("task_status"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("task_status"),
+        arity: 1,
+        func: native_task_status,
+    }));
+    
+    globals.insert(SmolStr::new("task_cancel"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("task_cancel"),
+        arity: 1,
+        func: native_task_cancel,
+    }));
+    
+    globals.insert(SmolStr::new("sleep"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("sleep"),
+        arity: 1,
+        func: native_sleep,
+    }));
+    
+    globals.insert(SmolStr::new("spawn_fn"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("spawn_fn"),
+        arity: 1,
+        func: native_spawn_fn,
+    }));
+    
+    globals.insert(SmolStr::new("await_result"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("await_result"),
+        arity: 1,
+        func: native_await_result,
+    }));
+    
+    globals.insert(SmolStr::new("parallel_exec"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("parallel_exec"),
+        arity: 1,
+        func: native_parallel_exec,
+    }));
+    
+    // ===============================
+    // M12: FFI & Native Extension Functions
+    // ===============================
+    
+    globals.insert(SmolStr::new("ffi_load"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("ffi_load"),
+        arity: 2,
+        func: native_ffi_load,
+    }));
+    
+    globals.insert(SmolStr::new("ffi_call"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("ffi_call"),
+        arity: 2,
+        func: native_ffi_call,
+    }));
+    
+    globals.insert(SmolStr::new("ffi_list"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("ffi_list"),
+        arity: 1,
+        func: native_ffi_list,
+    }));
+    
+    globals.insert(SmolStr::new("ffi_unload"), Value::NativeFunc(NativeFunc {
+        name: SmolStr::new("ffi_unload"),
+        arity: 1,
+        func: native_ffi_unload,
     }));
     
     globals
@@ -875,3 +1038,442 @@ fn native_memory_retrieve(args: &mut Vec<Value>) -> Value {
     }
 }
 
+// ===============================
+// M8: Agent, Model, Tool Functions
+// ===============================
+
+fn native_agent_create(args: &mut Vec<Value>) -> Value {
+    if args.len() < 2 {
+        return runtime_error("agent_create", "requires 2 arguments (name, model)");
+    }
+    match (&args[0], &args[1]) {
+        (Value::Str(name), Value::ModelVal(model)) => {
+            let tools = Rc::new(RefCell::new(ToolRegistry::new()));
+            let agent = AgentRuntime::new(
+                name.clone(),
+                model.borrow().clone(),
+                tools,
+            );
+            Value::Agent(Rc::new(RefCell::new(agent)))
+        }
+        (Value::Str(name), Value::Str(_model_name)) => {
+            // Create with a named model (stub)
+            let tools = Rc::new(RefCell::new(ToolRegistry::new()));
+            let model = ModelHandle::new(name.as_str());
+            let agent = AgentRuntime::new(
+                name.clone(),
+                model,
+                tools,
+            );
+            Value::Agent(Rc::new(RefCell::new(agent)))
+        }
+        (other, _) => runtime_error("agent_create",
+            &format!("first argument must be Str, got {}", other.type_name())),
+    }
+}
+
+fn native_agent_run(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Agent(agent)) => {
+            let result = agent.borrow_mut().run();
+            Value::Str(result)
+        }
+        Some(other) => runtime_error("agent_run",
+            &format!("expected Agent, got {}", other.type_name())),
+        None => runtime_error("agent_run", "missing argument"),
+    }
+}
+
+fn native_agent_step(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Agent(agent)) => {
+            let state = agent.borrow_mut().step();
+            Value::Str(SmolStr::new(state.to_string()))
+        }
+        Some(other) => runtime_error("agent_step",
+            &format!("expected Agent, got {}", other.type_name())),
+        None => runtime_error("agent_step", "missing argument"),
+    }
+}
+
+fn native_agent_status(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Agent(agent)) => {
+            Value::Str(SmolStr::new(agent.borrow().status()))
+        }
+        Some(other) => runtime_error("agent_status",
+            &format!("expected Agent, got {}", other.type_name())),
+        None => runtime_error("agent_status", "missing argument"),
+    }
+}
+
+fn native_model_create(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Str(name)) => {
+            let model = ModelHandle::new(name.clone());
+            Value::ModelVal(Rc::new(RefCell::new(model)))
+        }
+        Some(other) => runtime_error("model_create",
+            &format!("expected Str, got {}", other.type_name())),
+        None => runtime_error("model_create", "missing argument"),
+    }
+}
+
+fn native_model_generate(args: &mut Vec<Value>) -> Value {
+    if args.len() < 2 {
+        return runtime_error("model_generate", "requires 2 arguments (model, input)");
+    }
+    match (&args[0], &args[1]) {
+        (Value::ModelVal(model), Value::Tensor(input)) => {
+            let result = model.borrow().generate(&input.borrow());
+            Value::Tensor(Rc::new(RefCell::new(result)))
+        }
+        (Value::ModelVal(_), other) => runtime_error("model_generate",
+            &format!("second argument must be Tensor, got {}", other.type_name())),
+        (other, _) => runtime_error("model_generate",
+            &format!("first argument must be Model, got {}", other.type_name())),
+    }
+}
+
+fn native_tool_list(args: &mut Vec<Value>) -> Value {
+    let _ = args;
+    let registry = ToolRegistry::new();
+    let names: Vec<Value> = registry.list().iter()
+        .map(|n| Value::Str(n.clone()))
+        .collect();
+    Value::List(Rc::new(RefCell::new(names)))
+}
+
+fn native_tool_call(args: &mut Vec<Value>) -> Value {
+    if args.len() < 2 {
+        return runtime_error("tool_call", "requires 2 arguments (name, args)");
+    }
+    match (&args[0], &args[1]) {
+        (Value::Str(name), Value::List(tool_args)) => {
+            let registry = ToolRegistry::new();
+            let str_args: Vec<SmolStr> = tool_args.borrow().iter()
+                .map(|v| SmolStr::new(format!("{}", v)))
+                .collect();
+            match registry.call(name.as_str(), &str_args) {
+                Some(result) => {
+                    if result.success {
+                        Value::Str(result.output)
+                    } else {
+                        runtime_error("tool_call",
+                            &format!("tool failed: {}", result.error.unwrap_or_default()))
+                    }
+                }
+                None => runtime_error("tool_call",
+                    &format!("tool '{}' not found", name)),
+            }
+        }
+        (Value::Str(_), other) => runtime_error("tool_call",
+            &format!("second argument must be List, got {}", other.type_name())),
+        (other, _) => runtime_error("tool_call",
+            &format!("first argument must be Str, got {}", other.type_name())),
+    }
+}
+
+fn native_mlp_create(args: &mut Vec<Value>) -> Value {
+    if args.len() < 2 {
+        return runtime_error("mlp_create", "requires 2 arguments (layer_sizes, activation)");
+    }
+    // Extract layer sizes from list of ints
+    let sizes = match list_to_shape(&args[0]) {
+        Some(s) if s.len() >= 2 => s,
+        _ => return runtime_error("mlp_create", "first argument must be list of at least 2 integers"),
+    };
+    // Extract activation name
+    let activation = match &args[1] {
+        Value::Str(s) => match s.as_str() {
+            "relu" => Activation::ReLU,
+            "sigmoid" => Activation::Sigmoid,
+            "tanh" => Activation::Tanh,
+            "none" => Activation::None,
+            _ => Activation::ReLU,
+        },
+        _ => Activation::ReLU,
+    };
+    let mlp = MLP::new(&sizes, activation);
+    let model = ModelHandle {
+        name: SmolStr::new("mlp"),
+        temperature: 0.0,
+        max_tokens: 0,
+        mlp: Some(mlp),
+    };
+    Value::ModelVal(Rc::new(RefCell::new(model)))
+}
+
+fn native_mlp_forward(args: &mut Vec<Value>) -> Value {
+    if args.len() < 2 {
+        return runtime_error("mlp_forward", "requires 2 arguments (model, input)");
+    }
+    match (&args[0], &args[1]) {
+        (Value::ModelVal(model), Value::Tensor(input)) => {
+            let m = model.borrow();
+            match &m.mlp {
+                Some(mlp) => {
+                    let result = mlp.forward(&input.borrow());
+                    Value::Tensor(Rc::new(RefCell::new(result)))
+                }
+                None => runtime_error("mlp_forward", "model has no MLP"),
+            }
+        }
+        (Value::ModelVal(_), other) => runtime_error("mlp_forward",
+            &format!("second argument must be Tensor, got {}", other.type_name())),
+        (other, _) => runtime_error("mlp_forward",
+            &format!("first argument must be Model, got {}", other.type_name())),
+    }
+}
+
+fn native_mlp_train_step(args: &mut Vec<Value>) -> Value {
+    // Takes model and a list [input_tensor, target_tensor, learning_rate]
+    if args.len() < 2 {
+        return runtime_error("mlp_train_step", "requires 2 arguments (model, [input, target, lr])");
+    }
+    match (&args[0], &args[1]) {
+        (Value::ModelVal(model), Value::List(params)) => {
+            let params_borrowed = params.borrow();
+            if params_borrowed.len() < 3 {
+                return runtime_error("mlp_train_step", 
+                    "second argument must be [input_tensor, target_tensor, learning_rate]");
+            }
+            
+            let input = match &params_borrowed[0] {
+                Value::Tensor(t) => t.borrow().clone(),
+                _ => return runtime_error("mlp_train_step", "input must be Tensor"),
+            };
+            let target = match &params_borrowed[1] {
+                Value::Tensor(t) => t.borrow().clone(),
+                _ => return runtime_error("mlp_train_step", "target must be Tensor"),
+            };
+            let lr = match &params_borrowed[2] {
+                Value::Float(f) => *f as f32,
+                Value::Int(i) => *i as f32,
+                _ => return runtime_error("mlp_train_step", "learning rate must be Float"),
+            };
+            
+            let m = model.borrow();
+            match &m.mlp {
+                Some(mlp) => {
+                    let mut optimizer = a16_tensor::SGD::new(mlp.parameters(), lr);
+                    let loss = a16_tensor::train_step(mlp, &input, &target, &mut optimizer);
+                    Value::Float(loss as f64)
+                }
+                None => runtime_error("mlp_train_step", "model has no MLP"),
+            }
+        }
+        (Value::ModelVal(_), other) => runtime_error("mlp_train_step",
+            &format!("second argument must be List, got {}", other.type_name())),
+        (other, _) => runtime_error("mlp_train_step",
+            &format!("first argument must be Model, got {}", other.type_name())),
+    }
+}
+
+// ===============================
+// M11: Async & Concurrency Function Implementations
+// ===============================
+
+fn native_channel_create(args: &mut Vec<Value>) -> Value {
+    let capacity = match args.first() {
+        Some(Value::Int(n)) => *n as usize,
+        _ => 16, // default capacity
+    };
+    let ch = a16_runtime::Channel::new(SmolStr::new("channel"), capacity);
+    Value::Channel(Rc::new(RefCell::new(ch)))
+}
+
+fn native_channel_send(args: &mut Vec<Value>) -> Value {
+    if args.len() < 2 {
+        return runtime_error("channel_send", "requires 2 arguments (channel, value)");
+    }
+    match &args[0] {
+        Value::Channel(ch) => {
+            let msg = a16_runtime::ChannelMessage::Text(
+                SmolStr::new(format!("{}", args[1]))
+            );
+            match ch.borrow_mut().send(msg) {
+                Ok(()) => Value::Bool(true),
+                Err(e) => {
+                    eprintln!("channel_send: {}", e);
+                    Value::Bool(false)
+                }
+            }
+        }
+        other => runtime_error("channel_send",
+            &format!("first argument must be Channel, got {}", other.type_name())),
+    }
+}
+
+fn native_channel_recv(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Channel(ch)) => {
+            match ch.borrow_mut().recv() {
+                Ok(msg) => match msg {
+                    a16_runtime::ChannelMessage::Text(s) => Value::Str(s),
+                    a16_runtime::ChannelMessage::ValueId(_) => Value::None,
+                },
+                Err(_) => Value::None,
+            }
+        }
+        Some(other) => runtime_error("channel_recv",
+            &format!("expected Channel, got {}", other.type_name())),
+        None => runtime_error("channel_recv", "missing argument"),
+    }
+}
+
+fn native_channel_close(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Channel(ch)) => {
+            ch.borrow_mut().close();
+            Value::None
+        }
+        Some(other) => runtime_error("channel_close",
+            &format!("expected Channel, got {}", other.type_name())),
+        None => runtime_error("channel_close", "missing argument"),
+    }
+}
+
+fn native_task_status(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Future(_id)) => {
+            // In eager execution mode, all futures are immediately "done"
+            Value::Str(SmolStr::new("done"))
+        }
+        Some(other) => runtime_error("task_status",
+            &format!("expected Future, got {}", other.type_name())),
+        None => runtime_error("task_status", "missing argument"),
+    }
+}
+
+fn native_task_cancel(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Future(_id)) => {
+            // In eager execution mode, future is already complete
+            Value::Bool(false) // cannot cancel completed task
+        }
+        Some(other) => runtime_error("task_cancel",
+            &format!("expected Future, got {}", other.type_name())),
+        None => runtime_error("task_cancel", "missing argument"),
+    }
+}
+
+fn native_sleep(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Int(ms)) => {
+            // Cooperative sleep: in a real async runtime this would yield.
+            // For now, actually sleep (useful for demos).
+            if *ms > 0 && *ms < 10000 {
+                std::thread::sleep(std::time::Duration::from_millis(*ms as u64));
+            }
+            Value::None
+        }
+        Some(Value::Float(secs)) => {
+            let ms = (*secs * 1000.0) as u64;
+            if ms > 0 && ms < 10000 {
+                std::thread::sleep(std::time::Duration::from_millis(ms));
+            }
+            Value::None
+        }
+        _ => Value::None,
+    }
+}
+
+fn native_spawn_fn(args: &mut Vec<Value>) -> Value {
+    // Wraps a value as a Future (for use with stdlib, not bytecode)
+    match args.first() {
+        Some(_val) => {
+            // In eager mode, the value is already computed
+            // We just wrap it as a "future" that's already resolved
+            Value::Future(0) // placeholder ID
+        }
+        None => Value::None,
+    }
+}
+
+fn native_await_result(args: &mut Vec<Value>) -> Value {
+    // Unwrap a Future value (for use with stdlib, not bytecode)
+    match args.first() {
+        Some(Value::Future(_id)) => {
+            // In eager mode, we'd need access to task_results.
+            // Since native funcs don't have VM access, just pass through.
+            Value::None
+        }
+        Some(other) => other.clone(), // pass through non-futures
+        None => Value::None,
+    }
+}
+
+fn native_parallel_exec(args: &mut Vec<Value>) -> Value {
+    // Execute a list of values "in parallel" (eagerly, since we're single-threaded)
+    match args.first() {
+        Some(Value::List(list)) => {
+            // In eager mode, the values are already computed
+            // Just return them as-is
+            Value::List(list.clone())
+        }
+        Some(other) => runtime_error("parallel_exec",
+            &format!("expected List, got {}", other.type_name())),
+        None => runtime_error("parallel_exec", "missing argument"),
+    }
+}
+
+// ===============================
+// M12: FFI & Native Extension Function Implementations
+// ===============================
+
+fn native_ffi_load(args: &mut Vec<Value>) -> Value {
+    if args.len() < 2 {
+        return runtime_error("ffi_load", "requires 2 arguments (lib_name, path)");
+    }
+    match (&args[0], &args[1]) {
+        (Value::Str(name), Value::Str(path)) => {
+            // In the registered extensions model, we just acknowledge the load request.
+            // Actual library loading would happen via the FfiRegistry in the VM.
+            println!("[FFI] Registered library '{}' at '{}'", name, path);
+            Value::Bool(true)
+        }
+        (Value::Str(name), Value::None) => {
+            println!("[FFI] Registered built-in library '{}'", name);
+            Value::Bool(true)
+        }
+        _ => runtime_error("ffi_load", "expected (Str, Str) or (Str, None)"),
+    }
+}
+
+fn native_ffi_call(args: &mut Vec<Value>) -> Value {
+    if args.len() < 2 {
+        return runtime_error("ffi_call", "requires 2 arguments (func_name, args_list)");
+    }
+    match &args[0] {
+        Value::Str(func_name) => {
+            // Stub: FFI calls through stdlib require VM access.
+            // Real FFI calls go through the FfiCall opcode.
+            runtime_error("ffi_call",
+                &format!("function '{}' not available via stdlib (use extern blocks)", func_name))
+        }
+        _ => runtime_error("ffi_call", "first argument must be Str"),
+    }
+}
+
+fn native_ffi_list(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Str(lib_name)) => {
+            // Stub: would list functions from the FFI registry
+            // Returns empty list since we can't access VM state from here
+            println!("[FFI] Listing functions in '{}'", lib_name);
+            Value::List(Rc::new(RefCell::new(Vec::new())))
+        }
+        _ => runtime_error("ffi_list", "expected library name (Str)"),
+    }
+}
+
+fn native_ffi_unload(args: &mut Vec<Value>) -> Value {
+    match args.first() {
+        Some(Value::Str(lib_name)) => {
+            println!("[FFI] Unloaded library '{}'", lib_name);
+            Value::Bool(true)
+        }
+        _ => runtime_error("ffi_unload", "expected library name (Str)"),
+    }
+}

@@ -93,6 +93,9 @@ pub enum TokenKind {
     Spawn,
     Yield,
     
+    // FFI
+    Extern,
+    
     // Operators (keyword)
     And,
     Or,
@@ -227,7 +230,7 @@ impl TokenKind {
             Yield | And | Or | Not | In | Is | With | Pass | Del |
             None | True | False | Budget | Model | Context | Retrieve |
             Store | Compress | Stream | Invoke | Sandbox | Audit |
-            Permit | Deny | Policy | Trace | Team | On
+            Permit | Deny | Policy | Trace | Team | On | Extern
         )
     }
     
@@ -276,6 +279,7 @@ impl TokenKind {
             "await" => Some(Await),
             "spawn" => Some(Spawn),
             "yield" => Some(Yield),
+            "extern" => Some(Extern),
             "and" => Some(And),
             "or" => Some(Or),
             "not" => Some(Not),

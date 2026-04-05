@@ -146,6 +146,7 @@ impl<'src> Parser<'src> {
             TokenKind::Enum => Ok(Item::Enum(self.parse_enum()?)),
             TokenKind::Import | TokenKind::From => Ok(Item::Import(self.parse_import()?)),
             TokenKind::Const => Ok(Item::Const(self.parse_const()?)),
+            TokenKind::Extern => Ok(Item::Extern(self.parse_extern()?)),
             _ => {
                 let stmt = self.parse_statement()?;
                 Ok(Item::Stmt(stmt))
@@ -855,5 +856,78 @@ impl<'src> Parser<'src> {
                 span: name.span,
             })
         }
+    }
+    
+    // =========================================================================
+    // EXTERN BLOCKS (FFI)
+    // =========================================================================
+    
+    /// Parse an extern block: `extern "lib_name":`
+    pub fn parse_extern(&mut self) -> ParseResult<ExternBlock> {
+        let start = self.span();
+        self.expect(TokenKind::Extern)?;
+        
+        // Expect library name as string literal
+        let lib_name = if self.at(TokenKind::String) {
+            let token = self.advance();
+            // Strip quotes from the string literal
+            let s = token.text.as_str();
+            let trimmed = s.trim_matches('"').trim_matches('\'');
+            smol_str::SmolStr::new(trimmed)
+        } else {
+            return Err(ParseError::InvalidSyntax {
+                message: "expected string literal for library name after 'extern'".to_string(),
+                span: self.span(),
+            });
+        };
+        
+        self.expect(TokenKind::Colon)?;
+        self.expect(TokenKind::Newline)?;
+        self.expect(TokenKind::Indent)?;
+        
+        let mut functions = Vec::new();
+        while !self.at(TokenKind::Dedent) && !self.at(TokenKind::Eof) {
+            self.skip_newlines();
+            if self.at(TokenKind::Dedent) || self.at(TokenKind::Eof) {
+                break;
+            }
+            functions.push(self.parse_extern_func()?);
+            self.consume_if(TokenKind::Newline);
+        }
+        
+        if self.at(TokenKind::Dedent) {
+            self.advance();
+        }
+        
+        Ok(ExternBlock {
+            lib_name,
+            functions,
+            span: start.merge(self.span()),
+        })
+    }
+    
+    /// Parse a single extern function declaration (no body)
+    fn parse_extern_func(&mut self) -> ParseResult<ExternFunc> {
+        let start = self.span();
+        self.expect(TokenKind::Fn)?;
+        
+        let name = self.parse_ident()?;
+        
+        self.expect(TokenKind::LParen)?;
+        let params = self.parse_parameters()?;
+        self.expect(TokenKind::RParen)?;
+        
+        let return_type = if self.consume_if(TokenKind::Arrow) {
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
+        
+        Ok(ExternFunc {
+            name,
+            params,
+            return_type,
+            span: start.merge(self.span()),
+        })
     }
 }

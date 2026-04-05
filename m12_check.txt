@@ -1,0 +1,14 @@
+﻿
+error[E0004]: 
+non-exhaustive patterns: `
+&a16_ast::Item::Extern(_)`
+ not covered
+error[E0004]: 
+non-exhaustive patterns: `
+&a16_ast::Item::Extern(_)`
+ not covered
+warning: build failed, 
+waiting for other jobs to 
+finish...
+
+

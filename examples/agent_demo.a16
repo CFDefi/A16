@@ -1,0 +1,30 @@
+# A16 Agent Demo
+# Demonstrates the agent runtime with tools and model inference
+
+# Create a model
+let model = model_create("demo_model")
+
+# Create an agent
+let agent = agent_create("researcher", model)
+
+# Check agent status
+let status = agent_status(agent)
+println(status)
+
+# Run the agent
+let result = agent_run(agent)
+println(result)
+
+# List available tools
+let tools = tool_list()
+println(tools)
+
+# Call a built-in tool directly
+let calc_result = tool_call("calculator", ["2 + 3"])
+println(calc_result)
+
+let echo_result = tool_call("echo", ["Hello from A16!"])
+println(echo_result)
+
+let time = tool_call("clock", [])
+println(time)

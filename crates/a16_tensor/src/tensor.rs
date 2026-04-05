@@ -384,6 +384,14 @@ impl Tensor {
             a.iter().map(|&x| op(x, b[0])).collect()
         } else if a.len() == 1 {
             b.iter().map(|&y| op(a[0], y)).collect()
+        } else if self.ndim() == 2 && other.ndim() == 1 && self.shape[1] == other.shape[0] {
+            // Row-wise broadcast: [M, N] op [N] -> [M, N]
+            let n = other.shape[0];
+            a.iter().enumerate().map(|(i, &x)| op(x, b[i % n])).collect()
+        } else if self.ndim() == 1 && other.ndim() == 2 && self.shape[0] == other.shape[1] {
+            // Row-wise broadcast (reversed): [N] op [M, N] -> [M, N]
+            let n = self.shape[0];
+            b.iter().enumerate().map(|(i, &y)| op(a[i % n], y)).collect()
         } else {
             panic!("Shape mismatch in {}: {:?} vs {:?}", name, self.shape, other.shape);
         };

@@ -1,0 +1,27 @@
+﻿
+error[E0004]: 
+non-exhaustive patterns: `
+&a16_ast::Item::Extern(_)`
+ not covered
+  --> crates\a16_typeck\sr
+c\check_item.rs:12:15
+  --> C:\Users\vanfo\Docum
+ents\A16\crates\a16_ast\sr
+c\nodes.rs:8:1
+error[E0004]: 
+non-exhaustive patterns: `
+&a16_ast::Item::Extern(_)`
+ not covered
+   --> crates\a16_typeck\s
+rc\check_item.rs:405:11
+   --> C:\Users\vanfo\Docu
+ments\A16\crates\a16_ast\s
+rc\nodes.rs:8:1
+For more information 
+about this error, try 
+`rustc --explain E0004`.
+error: could not compile 
+`a16_typeck` (lib) due to 
+2 previous errors
+
+

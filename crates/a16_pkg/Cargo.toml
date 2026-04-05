@@ -1,0 +1,10 @@
+[package]
+name = "a16_pkg"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+smol_str = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

@@ -1,0 +1,373 @@
+# A16 Bootstrap Bytecode Compiler
+# Compiles AST nodes to a flat bytecode instruction list.
+#
+# Bytecode format: list of instructions, each a list [opcode, ...operands]
+# Function table: list of [name, start_ip, param_count]
+
+# =========================================================================
+# Opcodes
+# =========================================================================
+const OP_LOAD_CONST = 1
+const OP_LOAD_LOCAL = 2
+const OP_STORE_LOCAL = 3
+const OP_LOAD_GLOBAL = 4
+const OP_STORE_GLOBAL = 5
+const OP_ADD = 10
+const OP_SUB = 11
+const OP_MUL = 12
+const OP_DIV = 13
+const OP_MOD = 14
+const OP_NEG = 15
+const OP_NOT = 16
+const OP_EQ = 20
+const OP_NEQ = 21
+const OP_LT = 22
+const OP_GT = 23
+const OP_LTE = 24
+const OP_GTE = 25
+const OP_AND = 26
+const OP_OR = 27
+const OP_JUMP = 30
+const OP_JUMP_IF_FALSE = 31
+const OP_CALL = 40
+const OP_RETURN = 41
+const OP_RETURN_NONE = 42
+const OP_POP = 50
+const OP_DUP = 51
+const OP_MAKE_LIST = 60
+const OP_SUBSCRIPT = 61
+const OP_PRINT = 70
+const OP_PRINTLN = 71
+const OP_HALT = 99
+
+# =========================================================================
+# Compiler State
+# =========================================================================
+fn make_compiler() -> Dict:
+    return {
+        "code": [],
+        "constants": [],
+        "functions": [],
+        "locals": [],
+        "scope_depth": 0
+    }
+
+fn emit(c: Dict, op: Int):
+    append(c["code"], [op])
+
+fn emit1(c: Dict, op: Int, arg: Int):
+    append(c["code"], [op, arg])
+
+fn add_constant(c: Dict, value) -> Int:
+    let idx = len(c["constants"])
+    append(c["constants"], value)
+    return idx
+
+fn current_ip(c: Dict) -> Int:
+    return len(c["code"])
+
+fn find_local(c: Dict, name: Str) -> Int:
+    let locals = c["locals"]
+    let i = len(locals) - 1
+    while i >= 0:
+        if locals[i] == name:
+            return i
+        i = i - 1
+    return 0 - 1
+
+fn add_local(c: Dict, name: Str) -> Int:
+    let idx = len(c["locals"])
+    append(c["locals"], name)
+    return idx
+
+# =========================================================================
+# Compilation
+# =========================================================================
+fn compile_module(c: Dict, node: List):
+    let items = node[1]
+    for item in items:
+        compile_item(c, item)
+    emit(c, OP_HALT)
+
+fn compile_item(c: Dict, node: List):
+    let kind = node[0]
+    if kind == "func":
+        compile_function(c, node)
+    elif kind == "const_def":
+        compile_const(c, node)
+    elif kind == "expr_stmt":
+        compile_expr(c, node[1])
+        emit(c, OP_POP)
+
+fn compile_function(c: Dict, node: List):
+    let name = node[1]
+    let params = node[2]
+    let body = node[4]
+
+    # Record function entry
+    let entry_ip = current_ip(c)
+    let param_count = len(params)
+    append(c["functions"], [name, entry_ip, param_count])
+
+    # Set up locals for params
+    let saved_locals = c["locals"]
+    c["locals"] = []
+    for param in params:
+        add_local(c, param[1])
+
+    # Compile body
+    compile_block(c, body)
+
+    # Default return None
+    emit(c, OP_RETURN_NONE)
+
+    # Restore state
+    c["locals"] = saved_locals
+
+fn compile_const(c: Dict, node: List):
+    let name = node[1]
+    compile_expr(c, node[3])
+    let idx = add_local(c, name)
+    emit1(c, OP_STORE_LOCAL, idx)
+
+fn compile_block(c: Dict, node: List):
+    let stmts = node[1]
+    for stmt in stmts:
+        compile_stmt(c, stmt)
+
+fn compile_stmt(c: Dict, node: List):
+    let kind = node[0]
+
+    if kind == "let":
+        compile_let(c, node)
+    elif kind == "return":
+        compile_return(c, node)
+    elif kind == "if":
+        compile_if(c, node)
+    elif kind == "while":
+        compile_while(c, node)
+    elif kind == "for":
+        compile_for(c, node)
+    elif kind == "assign":
+        compile_assign(c, node)
+    elif kind == "expr_stmt":
+        compile_expr(c, node[1])
+        emit(c, OP_POP)
+    elif kind == "pass":
+        pass
+    elif kind == "break":
+        pass
+    elif kind == "continue":
+        pass
+
+fn compile_let(c: Dict, node: List):
+    let name = node[1]
+    if node[3] != None:
+        compile_expr(c, node[3])
+    else:
+        let idx = add_constant(c, None)
+        emit1(c, OP_LOAD_CONST, idx)
+    let local_idx = add_local(c, name)
+    emit1(c, OP_STORE_LOCAL, local_idx)
+
+fn compile_return(c: Dict, node: List):
+    if node[1] != None:
+        compile_expr(c, node[1])
+        emit(c, OP_RETURN)
+    else:
+        emit(c, OP_RETURN_NONE)
+
+fn compile_if(c: Dict, node: List):
+    compile_expr(c, node[1])
+    let jump_false = current_ip(c)
+    emit1(c, OP_JUMP_IF_FALSE, 0)
+    compile_block(c, node[2])
+    if node[3] != None:
+        let jump_end = current_ip(c)
+        emit1(c, OP_JUMP, 0)
+        # Patch false jump
+        c["code"][jump_false] = [OP_JUMP_IF_FALSE, current_ip(c)]
+        compile_block(c, node[3])
+        # Patch end jump
+        c["code"][jump_end] = [OP_JUMP, current_ip(c)]
+    else:
+        c["code"][jump_false] = [OP_JUMP_IF_FALSE, current_ip(c)]
+
+fn compile_while(c: Dict, node: List):
+    let loop_start = current_ip(c)
+    compile_expr(c, node[1])
+    let jump_end = current_ip(c)
+    emit1(c, OP_JUMP_IF_FALSE, 0)
+    compile_block(c, node[2])
+    emit1(c, OP_JUMP, loop_start)
+    c["code"][jump_end] = [OP_JUMP_IF_FALSE, current_ip(c)]
+
+fn compile_for(c: Dict, node: List):
+    # Simplified: for var in expr -> while loop over index
+    let var_name = node[1]
+    compile_expr(c, node[2])
+    let list_idx = add_local(c, "__iter__")
+    emit1(c, OP_STORE_LOCAL, list_idx)
+    let counter = add_constant(c, 0)
+    emit1(c, OP_LOAD_CONST, counter)
+    let cnt_idx = add_local(c, "__idx__")
+    emit1(c, OP_STORE_LOCAL, cnt_idx)
+    let var_idx = add_local(c, var_name)
+    let loop_start = current_ip(c)
+    # Check idx < len(list)
+    emit1(c, OP_LOAD_LOCAL, cnt_idx)
+    emit1(c, OP_LOAD_LOCAL, list_idx)
+    emit(c, OP_SUBSCRIPT)
+    emit1(c, OP_STORE_LOCAL, var_idx)
+    compile_block(c, node[3])
+    # Increment counter
+    emit1(c, OP_LOAD_LOCAL, cnt_idx)
+    let one = add_constant(c, 1)
+    emit1(c, OP_LOAD_CONST, one)
+    emit(c, OP_ADD)
+    emit1(c, OP_STORE_LOCAL, cnt_idx)
+    emit1(c, OP_JUMP, loop_start)
+
+fn compile_assign(c: Dict, node: List):
+    compile_expr(c, node[2])
+    let target = node[1]
+    if target[0] == "ident":
+        let idx = find_local(c, target[1])
+        if idx >= 0:
+            emit1(c, OP_STORE_LOCAL, idx)
+        else:
+            let gi = add_constant(c, target[1])
+            emit1(c, OP_STORE_GLOBAL, gi)
+
+# =========================================================================
+# Expression Compilation
+# =========================================================================
+fn compile_expr(c: Dict, node: List):
+    let kind = node[0]
+
+    if kind == "int":
+        let idx = add_constant(c, node[1])
+        emit1(c, OP_LOAD_CONST, idx)
+
+    elif kind == "float_lit":
+        let idx = add_constant(c, node[1])
+        emit1(c, OP_LOAD_CONST, idx)
+
+    elif kind == "str":
+        let idx = add_constant(c, node[1])
+        emit1(c, OP_LOAD_CONST, idx)
+
+    elif kind == "bool":
+        let idx = add_constant(c, node[1])
+        emit1(c, OP_LOAD_CONST, idx)
+
+    elif kind == "none":
+        let idx = add_constant(c, None)
+        emit1(c, OP_LOAD_CONST, idx)
+
+    elif kind == "ident":
+        let name = node[1]
+        let idx = find_local(c, name)
+        if idx >= 0:
+            emit1(c, OP_LOAD_LOCAL, idx)
+        else:
+            let gi = add_constant(c, name)
+            emit1(c, OP_LOAD_GLOBAL, gi)
+
+    elif kind == "binary":
+        compile_binary(c, node)
+
+    elif kind == "unary":
+        compile_expr(c, node[2])
+        if node[1] == "-":
+            emit(c, OP_NEG)
+        elif node[1] == "not":
+            emit(c, OP_NOT)
+
+    elif kind == "call":
+        compile_call(c, node)
+
+    elif kind == "list":
+        let items = node[1]
+        for item in items:
+            compile_expr(c, item)
+        emit1(c, OP_MAKE_LIST, len(items))
+
+    elif kind == "subscript":
+        compile_expr(c, node[1])
+        compile_expr(c, node[2])
+        emit(c, OP_SUBSCRIPT)
+
+fn compile_binary(c: Dict, node: List):
+    let op = node[1]
+    compile_expr(c, node[2])
+    compile_expr(c, node[3])
+
+    if op == "+":
+        emit(c, OP_ADD)
+    elif op == "-":
+        emit(c, OP_SUB)
+    elif op == "*":
+        emit(c, OP_MUL)
+    elif op == "/":
+        emit(c, OP_DIV)
+    elif op == "%":
+        emit(c, OP_MOD)
+    elif op == "==":
+        emit(c, OP_EQ)
+    elif op == "!=":
+        emit(c, OP_NEQ)
+    elif op == "<":
+        emit(c, OP_LT)
+    elif op == ">":
+        emit(c, OP_GT)
+    elif op == "<=":
+        emit(c, OP_LTE)
+    elif op == ">=":
+        emit(c, OP_GTE)
+    elif op == "and":
+        emit(c, OP_AND)
+    elif op == "or":
+        emit(c, OP_OR)
+
+fn compile_call(c: Dict, node: List):
+    let func_expr = node[1]
+    let args = node[2]
+
+    # Built-in functions: println, print
+    if func_expr[0] == "ident":
+        if func_expr[1] == "println":
+            if len(args) > 0:
+                compile_expr(c, args[0])
+            else:
+                let idx = add_constant(c, "")
+                emit1(c, OP_LOAD_CONST, idx)
+            emit(c, OP_PRINTLN)
+            let idx = add_constant(c, None)
+            emit1(c, OP_LOAD_CONST, idx)
+            return
+
+        if func_expr[1] == "print":
+            if len(args) > 0:
+                compile_expr(c, args[0])
+            else:
+                let idx = add_constant(c, "")
+                emit1(c, OP_LOAD_CONST, idx)
+            emit(c, OP_PRINT)
+            let idx = add_constant(c, None)
+            emit1(c, OP_LOAD_CONST, idx)
+            return
+
+    # General function call
+    for arg in args:
+        compile_expr(c, arg)
+    compile_expr(c, func_expr)
+    emit1(c, OP_CALL, len(args))
+
+# =========================================================================
+# Entry Point
+# =========================================================================
+fn compile(ast: List) -> Dict:
+    let c = make_compiler()
+    compile_module(c, ast)
+    return c

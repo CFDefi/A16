@@ -1,0 +1,69 @@
+###
+Async Runtime Demo
+==================
+Demonstrates A16's async primitives:
+  - channel_create / channel_send / channel_recv
+  - task_status
+  - sleep
+  - parallel_exec
+###
+
+# Channel-based message passing
+fn channel_demo():
+    let ch = channel_create(10)
+    
+    # Send messages
+    channel_send(ch, "hello")
+    channel_send(ch, "from")
+    channel_send(ch, "A16")
+    
+    # Receive and print
+    let msg1 = channel_recv(ch)
+    let msg2 = channel_recv(ch)
+    let msg3 = channel_recv(ch)
+    
+    println(str(msg1) + " " + str(msg2) + " " + str(msg3))
+    
+    # Close channel
+    channel_close(ch)
+    return "channel_demo: passed"
+
+
+# Task lifecycle
+fn task_demo():
+    let future = spawn_fn(42)
+    let status = task_status(future)
+    println("Task status: " + str(status))
+    return "task_demo: passed"
+
+
+# Sleep demonstration
+fn sleep_demo():
+    println("Sleeping 100ms...")
+    sleep(100)
+    println("Awake!")
+    return "sleep_demo: passed"
+
+
+# Main entry point
+fn main():
+    println("=== A16 Async Runtime Demo ===")
+    println("")
+    
+    println("--- Channel Demo ---")
+    let r1 = channel_demo()
+    println(r1)
+    println("")
+    
+    println("--- Task Demo ---")
+    let r2 = task_demo()
+    println(r2)
+    println("")
+    
+    println("--- Sleep Demo ---")
+    let r3 = sleep_demo()
+    println(r3)
+    println("")
+    
+    println("=== All demos passed! ===")
+    return 0

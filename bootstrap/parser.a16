@@ -1,0 +1,385 @@
+# A16 Bootstrap Parser
+# Recursive descent parser producing a simple AST.
+# AST nodes are represented as lists: [node_type, ...fields]
+
+# =========================================================================
+# AST Node Types
+# =========================================================================
+const NODE_MODULE = "module"
+const NODE_FUNC = "func"
+const NODE_PARAM = "param"
+const NODE_BLOCK = "block"
+const NODE_LET = "let"
+const NODE_RETURN = "return"
+const NODE_IF = "if"
+const NODE_WHILE = "while"
+const NODE_FOR = "for"
+const NODE_EXPR_STMT = "expr_stmt"
+const NODE_PASS = "pass"
+const NODE_BREAK = "break"
+const NODE_CONTINUE = "continue"
+const NODE_ASSIGN = "assign"
+const NODE_BINARY = "binary"
+const NODE_UNARY = "unary"
+const NODE_CALL = "call"
+const NODE_INT = "int"
+const NODE_FLOAT = "float_lit"
+const NODE_STR = "str"
+const NODE_BOOL = "bool"
+const NODE_NONE_LIT = "none"
+const NODE_IDENT = "ident"
+const NODE_LIST = "list"
+const NODE_SUBSCRIPT = "subscript"
+const NODE_ATTR = "attr"
+const NODE_CONST = "const_def"
+
+# =========================================================================
+# Parser State
+# =========================================================================
+fn make_parser(tokens: List) -> Dict:
+    return {"tokens": tokens, "pos": 0}
+
+fn peek(p: Dict) -> List:
+    return p["tokens"][p["pos"]]
+
+fn peek_kind(p: Dict) -> Int:
+    return p["tokens"][p["pos"]][0]
+
+fn advance(p: Dict) -> List:
+    let tok = p["tokens"][p["pos"]]
+    p["pos"] = p["pos"] + 1
+    return tok
+
+fn expect(p: Dict, kind: Int) -> List:
+    let tok = advance(p)
+    if tok[0] != kind:
+        println("Parse error: expected " + str(kind) + " got " + str(tok[0]) + " '" + tok[1] + "'")
+    return tok
+
+fn skip_newlines(p: Dict):
+    while peek_kind(p) == 5:
+        advance(p)
+
+# =========================================================================
+# Top-Level Parsing
+# =========================================================================
+fn parse_module(p: Dict) -> List:
+    let items = []
+    skip_newlines(p)
+    while peek_kind(p) != 0:
+        let item = parse_item(p)
+        append(items, item)
+        skip_newlines(p)
+    return [NODE_MODULE, items]
+
+fn parse_item(p: Dict) -> List:
+    let kind = peek_kind(p)
+    if kind == 10:
+        return parse_function(p)
+    if kind == 28:
+        return parse_const(p)
+    return parse_stmt(p)
+
+# =========================================================================
+# Function Parsing
+# =========================================================================
+fn parse_function(p: Dict) -> List:
+    expect(p, 10)
+    let name = expect(p, 4)
+    expect(p, 56)
+    let params = parse_params(p)
+    expect(p, 57)
+    let ret_type = None
+    if peek_kind(p) == 52:
+        advance(p)
+        let ty = expect(p, 4)
+        ret_type = ty[1]
+    expect(p, 55)
+    skip_newlines(p)
+    let body = parse_block(p)
+    return [NODE_FUNC, name[1], params, ret_type, body]
+
+fn parse_params(p: Dict) -> List:
+    let params = []
+    if peek_kind(p) == 57:
+        return params
+    let name = expect(p, 4)
+    let ty = None
+    if peek_kind(p) == 55:
+        advance(p)
+        let type_name = expect(p, 4)
+        ty = type_name[1]
+    append(params, [NODE_PARAM, name[1], ty])
+    while peek_kind(p) == 54:
+        advance(p)
+        let pname = expect(p, 4)
+        let pty = None
+        if peek_kind(p) == 55:
+            advance(p)
+            let ptype_name = expect(p, 4)
+            pty = ptype_name[1]
+        append(params, [NODE_PARAM, pname[1], pty])
+    return params
+
+# =========================================================================
+# Block Parsing
+# =========================================================================
+fn parse_block(p: Dict) -> List:
+    let stmts = []
+    skip_newlines(p)
+    while peek_kind(p) != 0:
+        let kind = peek_kind(p)
+        # Stop at tokens that close a block (dedent, else, elif)
+        if kind == 7 or kind == 14 or kind == 15:
+            break
+        # Stop if we hit a top-level keyword at same indent
+        if kind == 10 or kind == 28:
+            break
+        let stmt = parse_stmt(p)
+        append(stmts, stmt)
+        skip_newlines(p)
+    return [NODE_BLOCK, stmts]
+
+# =========================================================================
+# Statement Parsing
+# =========================================================================
+fn parse_stmt(p: Dict) -> List:
+    let kind = peek_kind(p)
+
+    if kind == 11:
+        return parse_let(p)
+    if kind == 12:
+        return parse_return(p)
+    if kind == 13:
+        return parse_if(p)
+    if kind == 17:
+        return parse_while(p)
+    if kind == 16:
+        return parse_for(p)
+    if kind == 20:
+        advance(p)
+        return [NODE_PASS]
+    if kind == 18:
+        advance(p)
+        return [NODE_BREAK]
+    if kind == 19:
+        advance(p)
+        return [NODE_CONTINUE]
+
+    # Expression statement (possibly assignment)
+    let expr = parse_expr(p)
+    if peek_kind(p) == 51:
+        advance(p)
+        let value = parse_expr(p)
+        return [NODE_ASSIGN, expr, value]
+    return [NODE_EXPR_STMT, expr]
+
+fn parse_let(p: Dict) -> List:
+    expect(p, 11)
+    let name = expect(p, 4)
+    let ty = None
+    if peek_kind(p) == 55:
+        advance(p)
+        let type_name = expect(p, 4)
+        ty = type_name[1]
+    let value = None
+    if peek_kind(p) == 51:
+        advance(p)
+        value = parse_expr(p)
+    return [NODE_LET, name[1], ty, value]
+
+fn parse_return(p: Dict) -> List:
+    expect(p, 12)
+    let value = None
+    let kind = peek_kind(p)
+    if kind != 5 and kind != 0:
+        value = parse_expr(p)
+    return [NODE_RETURN, value]
+
+fn parse_if(p: Dict) -> List:
+    expect(p, 13)
+    let cond = parse_expr(p)
+    expect(p, 55)
+    skip_newlines(p)
+    let then_block = parse_block(p)
+    let else_block = None
+    if peek_kind(p) == 14:
+        advance(p)
+        expect(p, 55)
+        skip_newlines(p)
+        else_block = parse_block(p)
+    elif peek_kind(p) == 15:
+        else_block = [NODE_BLOCK, [parse_if(p)]]
+    return [NODE_IF, cond, then_block, else_block]
+
+fn parse_while(p: Dict) -> List:
+    expect(p, 17)
+    let cond = parse_expr(p)
+    expect(p, 55)
+    skip_newlines(p)
+    let body = parse_block(p)
+    return [NODE_WHILE, cond, body]
+
+fn parse_for(p: Dict) -> List:
+    expect(p, 16)
+    let var = expect(p, 4)
+    expect(p, 27)
+    let iter = parse_expr(p)
+    expect(p, 55)
+    skip_newlines(p)
+    let body = parse_block(p)
+    return [NODE_FOR, var[1], iter, body]
+
+fn parse_const(p: Dict) -> List:
+    expect(p, 28)
+    let name = expect(p, 4)
+    let ty = None
+    if peek_kind(p) == 55:
+        advance(p)
+        let type_name = expect(p, 4)
+        ty = type_name[1]
+    expect(p, 51)
+    let value = parse_expr(p)
+    return [NODE_CONST, name[1], ty, value]
+
+# =========================================================================
+# Expression Parsing (Pratt-style)
+# =========================================================================
+fn parse_expr(p: Dict) -> List:
+    return parse_or(p)
+
+fn parse_or(p: Dict) -> List:
+    let left = parse_and(p)
+    while peek_kind(p) == 25:
+        advance(p)
+        let right = parse_and(p)
+        left = [NODE_BINARY, "or", left, right]
+    return left
+
+fn parse_and(p: Dict) -> List:
+    let left = parse_comparison(p)
+    while peek_kind(p) == 24:
+        advance(p)
+        let right = parse_comparison(p)
+        left = [NODE_BINARY, "and", left, right]
+    return left
+
+fn parse_comparison(p: Dict) -> List:
+    let left = parse_add(p)
+    let kind = peek_kind(p)
+    if kind == 45 or kind == 46 or kind == 47 or kind == 48 or kind == 49 or kind == 50:
+        let op = advance(p)
+        let right = parse_add(p)
+        return [NODE_BINARY, op[1], left, right]
+    return left
+
+fn parse_add(p: Dict) -> List:
+    let left = parse_mul(p)
+    while peek_kind(p) == 40 or peek_kind(p) == 41:
+        let op = advance(p)
+        let right = parse_mul(p)
+        left = [NODE_BINARY, op[1], left, right]
+    return left
+
+fn parse_mul(p: Dict) -> List:
+    let left = parse_unary(p)
+    while peek_kind(p) == 42 or peek_kind(p) == 43 or peek_kind(p) == 44:
+        let op = advance(p)
+        let right = parse_unary(p)
+        left = [NODE_BINARY, op[1], left, right]
+    return left
+
+fn parse_unary(p: Dict) -> List:
+    let kind = peek_kind(p)
+    if kind == 41:
+        advance(p)
+        let operand = parse_unary(p)
+        return [NODE_UNARY, "-", operand]
+    if kind == 26:
+        advance(p)
+        let operand = parse_unary(p)
+        return [NODE_UNARY, "not", operand]
+    return parse_postfix(p)
+
+fn parse_postfix(p: Dict) -> List:
+    let expr = parse_primary(p)
+    while True:
+        let kind = peek_kind(p)
+        if kind == 56:
+            advance(p)
+            let args = parse_args(p)
+            expect(p, 57)
+            expr = [NODE_CALL, expr, args]
+        elif kind == 58:
+            advance(p)
+            let index = parse_expr(p)
+            expect(p, 59)
+            expr = [NODE_SUBSCRIPT, expr, index]
+        elif kind == 53:
+            advance(p)
+            let attr = expect(p, 4)
+            expr = [NODE_ATTR, expr, attr[1]]
+        else:
+            break
+    return expr
+
+fn parse_args(p: Dict) -> List:
+    let args = []
+    if peek_kind(p) == 57:
+        return args
+    append(args, parse_expr(p))
+    while peek_kind(p) == 54:
+        advance(p)
+        append(args, parse_expr(p))
+    return args
+
+fn parse_primary(p: Dict) -> List:
+    let kind = peek_kind(p)
+
+    if kind == 1:
+        let tok = advance(p)
+        return [NODE_INT, int(tok[1])]
+    if kind == 2:
+        let tok = advance(p)
+        return [NODE_FLOAT, float(tok[1])]
+    if kind == 3:
+        let tok = advance(p)
+        return [NODE_STR, tok[1]]
+    if kind == 21:
+        advance(p)
+        return [NODE_BOOL, True]
+    if kind == 22:
+        advance(p)
+        return [NODE_BOOL, False]
+    if kind == 23:
+        advance(p)
+        return [NODE_NONE_LIT]
+    if kind == 4:
+        let tok = advance(p)
+        return [NODE_IDENT, tok[1]]
+    if kind == 56:
+        advance(p)
+        let expr = parse_expr(p)
+        expect(p, 57)
+        return expr
+    if kind == 58:
+        advance(p)
+        let items = []
+        if peek_kind(p) != 59:
+            append(items, parse_expr(p))
+            while peek_kind(p) == 54:
+                advance(p)
+                append(items, parse_expr(p))
+        expect(p, 59)
+        return [NODE_LIST, items]
+
+    let tok = advance(p)
+    println("Unexpected token: " + str(tok[0]) + " '" + tok[1] + "'")
+    return [NODE_NONE_LIT]
+
+# =========================================================================
+# Entry Point
+# =========================================================================
+fn parse(tokens: List) -> List:
+    let p = make_parser(tokens)
+    return parse_module(p)

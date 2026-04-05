@@ -9,6 +9,8 @@ description = "Virtual Machine for A16 bytecode execution"
 a16_codegen = { path = "../a16_codegen" }
 a16_tensor = { path = "../a16_tensor" }
 a16_vector = { path = "../a16_vector" }
+a16_runtime = { path = "../a16_runtime" }
+a16_ffi = { path = "../a16_ffi" }
 smol_str.workspace = true
 indexmap.workspace = true
 

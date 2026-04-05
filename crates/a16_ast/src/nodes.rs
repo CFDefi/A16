@@ -16,6 +16,7 @@ pub enum Item {
     Enum(EnumDef),
     Import(ImportStmt),
     Const(ConstDef),
+    Extern(ExternBlock),
     Stmt(Stmt),
 }
 
@@ -719,4 +720,30 @@ impl TypeExpr {
             TypeExpr::Tuple(_, span) => *span,
         }
     }
+}
+
+// =============================================================================
+// FFI / EXTERN
+// =============================================================================
+
+/// An extern block declaring foreign functions from a native library
+#[derive(Debug, Clone)]
+pub struct ExternBlock {
+    /// Library name (e.g., "libc", "math_ext")
+    pub lib_name: SmolStr,
+    /// Declared extern functions
+    pub functions: Vec<ExternFunc>,
+    pub span: Span,
+}
+
+/// A foreign function declaration (no body)
+#[derive(Debug, Clone)]
+pub struct ExternFunc {
+    /// Function name
+    pub name: Ident,
+    /// Parameters with types
+    pub params: Vec<Param>,
+    /// Return type
+    pub return_type: Option<TypeExpr>,
+    pub span: Span,
 }

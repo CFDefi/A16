@@ -1,0 +1,13 @@
+[package]
+name = "a16_lsp"
+version.workspace = true
+edition.workspace = true
+description = "Language Server Protocol implementation for A16"
+
+[dependencies]
+a16_parser = { path = "../a16_parser" }
+a16_ast = { path = "../a16_ast" }
+a16_typeck = { path = "../a16_typeck" }
+a16_lint = { path = "../a16_lint" }
+smol_str = { workspace = true }
+indexmap = { workspace = true }

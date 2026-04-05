@@ -125,6 +125,18 @@ pub struct HirMatchArm {
     pub body: HirBlock,
 }
 
+/// Upvalue capture descriptor for closures
+#[derive(Debug, Clone)]
+pub struct Upvalue {
+    /// Index of the captured variable in the enclosing scope
+    pub index: u8,
+    /// True if captured from the immediately enclosing function's locals,
+    /// false if captured from an outer closure's upvalues
+    pub is_local: bool,
+    /// Name of the captured variable (for debugging)
+    pub name: SmolStr,
+}
+
 /// Pattern for matching
 #[derive(Debug, Clone)]
 pub enum HirPattern {
@@ -132,6 +144,10 @@ pub enum HirPattern {
     Var(VarId, SmolStr),
     Literal(HirLiteral),
     Tuple(Vec<HirPattern>),
+    /// Constructor pattern: ClassName(sub-patterns)
+    Constructor(SmolStr, Vec<HirPattern>),
+    /// Or-pattern: p1 | p2
+    Or(Vec<HirPattern>),
 }
 
 /// HIR Expression
@@ -177,10 +193,15 @@ pub enum HirExpr {
     Dict(Vec<(HirExpr, HirExpr)>),
     /// Tuple literal
     Tuple(Vec<HirExpr>),
-    /// Lambda/closure
+    /// Lambda/closure (inline expression)
     Lambda {
         params: Vec<HirParam>,
         body: Box<HirExpr>,
+    },
+    /// Full closure with upvalue captures
+    Closure {
+        func_idx: u16,
+        upvalues: Vec<Upvalue>,
     },
     /// Conditional expression
     IfExpr {

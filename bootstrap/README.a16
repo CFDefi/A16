@@ -1,0 +1,21 @@
+# A16 Self-Hosting Bootstrap Compiler
+#
+# This directory contains a minimal A16 compiler written in A16 itself.
+# It demonstrates that A16 is expressive enough to compile a meaningful
+# subset of its own language.
+#
+# Components:
+#   lexer.a16    - Tokenizer (keywords, operators, literals, identifiers)
+#   parser.a16   - Recursive descent parser producing an AST
+#   codegen.a16  - Bytecode compiler emitting A16 VM instructions
+#   vm.a16       - Stack-based interpreter executing bytecode
+#   main.a16     - Entry point that ties it all together
+#
+# Usage:
+#   a16 run bootstrap/main.a16
+#
+# The bootstrap compiler can compile simple A16 programs:
+#   fn add(a, b):
+#       return a + b
+#   fn main():
+#       println(add(2, 3))

@@ -307,6 +307,33 @@ fn compile_stmt(compiler: &mut Compiler, stmt: &HirStmt) {
                         compiler.emit_u8(slot);
                         compiler.emit(Opcode::PushTrue);
                     }
+                    HirPattern::Tuple(sub_pats) => {
+                        // Nested tuple destructuring in match
+                        // For now, treat as wildcard match
+                        let _ = sub_pats;
+                        compiler.emit(Opcode::PushTrue);
+                    }
+                    HirPattern::Constructor(name, _sub_pats) => {
+                        // Constructor match: compare type name
+                        let idx = compiler.add_string_constant(name.clone());
+                        compiler.emit(Opcode::PushConst);
+                        compiler.emit_u16(idx);
+                        compiler.emit(Opcode::Eq);
+                    }
+                    HirPattern::Or(alternatives) => {
+                        // Or-pattern: try each alternative
+                        // For first alternative, check literal if it is one
+                        if let Some(first) = alternatives.first() {
+                            if let HirPattern::Literal(lit) = first {
+                                compile_literal(compiler, lit);
+                                compiler.emit(Opcode::Eq);
+                            } else {
+                                compiler.emit(Opcode::PushTrue);
+                            }
+                        } else {
+                            compiler.emit(Opcode::PushTrue);
+                        }
+                    }
                     _ => {
                         compiler.emit(Opcode::PushTrue);
                     }
@@ -485,8 +512,19 @@ fn compile_expr(compiler: &mut Compiler, expr: &HirExpr) {
         }
         
         HirExpr::Lambda { params: _, body } => {
-            // TODO: Create closure
+            // Simple lambda: compile body inline (no upvalue capture)
             compile_expr(compiler, body);
+        }
+        
+        HirExpr::Closure { func_idx, upvalues } => {
+            // Full closure: emit MakeClosure with upvalue capture list
+            compiler.emit(Opcode::MakeClosure);
+            compiler.emit_u16(*func_idx);
+            compiler.emit_u8(upvalues.len() as u8);
+            for uv in upvalues {
+                compiler.emit_u8(if uv.is_local { 1 } else { 0 });
+                compiler.emit_u8(uv.index);
+            }
         }
         
         HirExpr::IfExpr { condition, then_expr, else_expr } => {

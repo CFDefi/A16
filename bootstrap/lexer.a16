@@ -1,0 +1,353 @@
+# A16 Bootstrap Lexer
+# Tokenizes A16 source code into a stream of tokens.
+
+# =========================================================================
+# Token Types (encoded as integers for simplicity)
+# =========================================================================
+const TK_EOF = 0
+const TK_INT = 1
+const TK_FLOAT = 2
+const TK_STRING = 3
+const TK_IDENT = 4
+const TK_NEWLINE = 5
+const TK_INDENT = 6
+const TK_DEDENT = 7
+
+# Keywords (10-39)
+const TK_FN = 10
+const TK_LET = 11
+const TK_RETURN = 12
+const TK_IF = 13
+const TK_ELSE = 14
+const TK_ELIF = 15
+const TK_FOR = 16
+const TK_WHILE = 17
+const TK_BREAK = 18
+const TK_CONTINUE = 19
+const TK_PASS = 20
+const TK_TRUE = 21
+const TK_FALSE = 22
+const TK_NONE = 23
+const TK_AND = 24
+const TK_OR = 25
+const TK_NOT = 26
+const TK_IN = 27
+const TK_CONST = 28
+const TK_CLASS = 29
+const TK_IMPORT = 30
+const TK_FROM = 31
+const TK_AS = 32
+const TK_ASYNC = 33
+const TK_AWAIT = 34
+const TK_STRUCT = 35
+const TK_ENUM = 36
+
+# Operators (40-69)
+const TK_PLUS = 40
+const TK_MINUS = 41
+const TK_STAR = 42
+const TK_SLASH = 43
+const TK_PERCENT = 44
+const TK_EQ = 45
+const TK_NEQ = 46
+const TK_LT = 47
+const TK_GT = 48
+const TK_LTE = 49
+const TK_GTE = 50
+const TK_ASSIGN = 51
+const TK_ARROW = 52
+const TK_DOT = 53
+const TK_COMMA = 54
+const TK_COLON = 55
+const TK_LPAREN = 56
+const TK_RPAREN = 57
+const TK_LBRACKET = 58
+const TK_RBRACKET = 59
+const TK_LBRACE = 60
+const TK_RBRACE = 61
+
+# Token name lookup for debugging
+fn token_name(kind) -> Str:
+    if kind == TK_EOF:
+        return "EOF"
+    if kind == TK_INT:
+        return "INT"
+    if kind == TK_FLOAT:
+        return "FLOAT"
+    if kind == TK_STRING:
+        return "STRING"
+    if kind == TK_IDENT:
+        return "IDENT"
+    if kind == TK_NEWLINE:
+        return "NEWLINE"
+    if kind == TK_FN:
+        return "FN"
+    if kind == TK_LET:
+        return "LET"
+    if kind == TK_RETURN:
+        return "RETURN"
+    if kind == TK_IF:
+        return "IF"
+    if kind == TK_ELSE:
+        return "ELSE"
+    if kind == TK_FOR:
+        return "FOR"
+    if kind == TK_WHILE:
+        return "WHILE"
+    if kind == TK_PASS:
+        return "PASS"
+    if kind == TK_TRUE:
+        return "TRUE"
+    if kind == TK_FALSE:
+        return "FALSE"
+    if kind == TK_NONE:
+        return "NONE"
+    if kind == TK_PLUS:
+        return "PLUS"
+    if kind == TK_MINUS:
+        return "MINUS"
+    if kind == TK_STAR:
+        return "STAR"
+    if kind == TK_SLASH:
+        return "SLASH"
+    if kind == TK_ASSIGN:
+        return "ASSIGN"
+    if kind == TK_COLON:
+        return "COLON"
+    if kind == TK_COMMA:
+        return "COMMA"
+    if kind == TK_LPAREN:
+        return "LPAREN"
+    if kind == TK_RPAREN:
+        return "RPAREN"
+    return "UNKNOWN"
+
+# Keyword lookup
+fn keyword_lookup(word: Str) -> Int:
+    if word == "fn":
+        return TK_FN
+    if word == "let":
+        return TK_LET
+    if word == "return":
+        return TK_RETURN
+    if word == "if":
+        return TK_IF
+    if word == "else":
+        return TK_ELSE
+    if word == "elif":
+        return TK_ELIF
+    if word == "for":
+        return TK_FOR
+    if word == "while":
+        return TK_WHILE
+    if word == "break":
+        return TK_BREAK
+    if word == "continue":
+        return TK_CONTINUE
+    if word == "pass":
+        return TK_PASS
+    if word == "True":
+        return TK_TRUE
+    if word == "False":
+        return TK_FALSE
+    if word == "None":
+        return TK_NONE
+    if word == "and":
+        return TK_AND
+    if word == "or":
+        return TK_OR
+    if word == "not":
+        return TK_NOT
+    if word == "in":
+        return TK_IN
+    if word == "const":
+        return TK_CONST
+    if word == "class":
+        return TK_CLASS
+    if word == "import":
+        return TK_IMPORT
+    if word == "from":
+        return TK_FROM
+    if word == "as":
+        return TK_AS
+    if word == "async":
+        return TK_ASYNC
+    if word == "await":
+        return TK_AWAIT
+    if word == "struct":
+        return TK_STRUCT
+    if word == "enum":
+        return TK_ENUM
+    return 0 - 1
+
+# Check if a character is a digit
+fn is_digit(c: Str) -> Bool:
+    if c == "0":
+        return True
+    if c == "1":
+        return True
+    if c == "2":
+        return True
+    if c == "3":
+        return True
+    if c == "4":
+        return True
+    if c == "5":
+        return True
+    if c == "6":
+        return True
+    if c == "7":
+        return True
+    if c == "8":
+        return True
+    if c == "9":
+        return True
+    return False
+
+# Check if a character is alphabetic or underscore
+fn is_alpha(c: Str) -> Bool:
+    if c == "_":
+        return True
+    # Check lowercase a-z and uppercase A-Z via ASCII comparison
+    let code = int(c)
+    if code >= 65 and code <= 90:
+        return True
+    if code >= 97 and code <= 122:
+        return True
+    return False
+
+# Check if a character is alphanumeric or underscore
+fn is_alnum(c: Str) -> Bool:
+    return is_alpha(c) or is_digit(c)
+
+# =========================================================================
+# Lexer
+# =========================================================================
+fn tokenize(source: Str) -> List:
+    let tokens = []
+    let pos = 0
+    let length = len(source)
+
+    while pos < length:
+        let c = source[pos]
+
+        # Skip spaces (not newlines)
+        if c == " ":
+            pos = pos + 1
+            continue
+
+        # Skip comments
+        if c == "#":
+            while pos < length and source[pos] != "\n":
+                pos = pos + 1
+            continue
+
+        # Newlines
+        if c == "\n":
+            append(tokens, [TK_NEWLINE, "\n"])
+            pos = pos + 1
+            continue
+
+        # Numbers
+        if is_digit(c):
+            let start = pos
+            let is_float = False
+            while pos < length and (is_digit(source[pos]) or source[pos] == "."):
+                if source[pos] == ".":
+                    is_float = True
+                pos = pos + 1
+            let num_str = substring(source, start, pos)
+            if is_float:
+                append(tokens, [TK_FLOAT, num_str])
+            else:
+                append(tokens, [TK_INT, num_str])
+            continue
+
+        # Strings
+        if c == "\"":
+            pos = pos + 1
+            let start = pos
+            while pos < length and source[pos] != "\"":
+                pos = pos + 1
+            let s = substring(source, start, pos)
+            pos = pos + 1
+            append(tokens, [TK_STRING, s])
+            continue
+
+        # Identifiers and keywords
+        if is_alpha(c):
+            let start = pos
+            while pos < length and is_alnum(source[pos]):
+                pos = pos + 1
+            let word = substring(source, start, pos)
+            let kw = keyword_lookup(word)
+            if kw >= 0:
+                append(tokens, [kw, word])
+            else:
+                append(tokens, [TK_IDENT, word])
+            continue
+
+        # Two-character operators
+        if pos + 1 < length:
+            let two = substring(source, pos, pos + 2)
+            if two == "==":
+                append(tokens, [TK_EQ, "=="])
+                pos = pos + 2
+                continue
+            if two == "!=":
+                append(tokens, [TK_NEQ, "!="])
+                pos = pos + 2
+                continue
+            if two == "<=":
+                append(tokens, [TK_LTE, "<="])
+                pos = pos + 2
+                continue
+            if two == ">=":
+                append(tokens, [TK_GTE, ">="])
+                pos = pos + 2
+                continue
+            if two == "->":
+                append(tokens, [TK_ARROW, "->"])
+                pos = pos + 2
+                continue
+
+        # Single-character operators
+        if c == "+":
+            append(tokens, [TK_PLUS, "+"])
+        elif c == "-":
+            append(tokens, [TK_MINUS, "-"])
+        elif c == "*":
+            append(tokens, [TK_STAR, "*"])
+        elif c == "/":
+            append(tokens, [TK_SLASH, "/"])
+        elif c == "%":
+            append(tokens, [TK_PERCENT, "%"])
+        elif c == "=":
+            append(tokens, [TK_ASSIGN, "="])
+        elif c == "<":
+            append(tokens, [TK_LT, "<"])
+        elif c == ">":
+            append(tokens, [TK_GT, ">"])
+        elif c == ".":
+            append(tokens, [TK_DOT, "."])
+        elif c == ",":
+            append(tokens, [TK_COMMA, ","])
+        elif c == ":":
+            append(tokens, [TK_COLON, ":"])
+        elif c == "(":
+            append(tokens, [TK_LPAREN, "("])
+        elif c == ")":
+            append(tokens, [TK_RPAREN, ")"])
+        elif c == "[":
+            append(tokens, [TK_LBRACKET, "["])
+        elif c == "]":
+            append(tokens, [TK_RBRACKET, "]"])
+        elif c == "{":
+            append(tokens, [TK_LBRACE, "{"])
+        elif c == "}":
+            append(tokens, [TK_RBRACE, "}"])
+
+        pos = pos + 1
+
+    append(tokens, [TK_EOF, ""])
+    return tokens

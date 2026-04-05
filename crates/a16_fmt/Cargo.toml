@@ -1,0 +1,10 @@
+[package]
+name = "a16_fmt"
+version.workspace = true
+edition.workspace = true
+description = "Source code formatter for A16"
+
+[dependencies]
+a16_parser = { path = "../a16_parser" }
+a16_ast = { path = "../a16_ast" }
+smol_str = { workspace = true }

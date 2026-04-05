@@ -1,0 +1,34 @@
+﻿cargo :     Finished 
+`test` profile 
+[unoptimized + debuginfo] 
+target(s) in 0.05s
+At line:1 char:1
++ cargo test -p a16_hir 
+--lib 2>&1 | Out-File 
+-FilePath C:\Users\vanfo\ 
+...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (   
+     Finished `t...get(   
+ s) in 0.05s:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+     Running unittests 
+src\lib.rs (target\debug\d
+eps\a16_hir-34e68ff72c7552
+41.exe)
+
+running 5 tests
+test tests::test_lower_binary_ops ... ok
+test tests::test_lower_if_elif ... ok
+test tests::test_lower_agent ... ok
+test tests::test_lower_simple_function ... ok
+test tests::test_lower_for_loop ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

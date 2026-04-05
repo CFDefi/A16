@@ -204,6 +204,34 @@ pub enum TypeError {
         #[label("types are incompatible")]
         span: SourceSpan,
     },
+    
+    // M9: Pattern exhaustiveness
+    
+    /// Non-exhaustive match patterns
+    #[error("Non-exhaustive match: missing patterns: {patterns}")]
+    #[diagnostic(code(typeck::non_exhaustive), help("add a wildcard `_` arm or cover all cases"))]
+    NonExhaustiveMatch {
+        patterns: String,
+        #[label("match expression here")]
+        span: SourceSpan,
+    },
+    
+    /// Unreachable match arm
+    #[error("Unreachable match arm: previous patterns already cover this case")]
+    #[diagnostic(code(typeck::unreachable_arm))]
+    UnreachableArm {
+        #[label("this arm is unreachable")]
+        span: SourceSpan,
+    },
+    
+    /// Custom error (for extensibility)
+    #[error("{message}")]
+    #[diagnostic(code(typeck::custom))]
+    Custom {
+        message: String,
+        #[label("here")]
+        span: SourceSpan,
+    },
 }
 
 impl TypeError {
@@ -293,6 +321,29 @@ impl TypeError {
         TypeError::UnificationFailed {
             t1: t1.to_string(),
             t2: t2.to_string(),
+            span: to_source_span(span),
+        }
+    }
+    
+    /// Create a custom error
+    pub fn custom(message: String, span: Span) -> Self {
+        TypeError::Custom {
+            message,
+            span: to_source_span(span),
+        }
+    }
+    
+    /// Create a non-exhaustive match error
+    pub fn non_exhaustive_match(patterns: &[String], span: Span) -> Self {
+        TypeError::NonExhaustiveMatch {
+            patterns: patterns.join(", "),
+            span: to_source_span(span),
+        }
+    }
+    
+    /// Create an unreachable arm warning
+    pub fn unreachable_arm(span: Span) -> Self {
+        TypeError::UnreachableArm {
             span: to_source_span(span),
         }
     }

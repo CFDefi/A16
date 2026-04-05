@@ -6,6 +6,10 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use a16_tensor::Tensor;
 use a16_vector::HNSWIndex;
+use a16_runtime::Channel;
+
+use crate::agent::{AgentRuntime, ModelHandle};
+use crate::tool_registry::ToolDef;
 
 /// Runtime value
 #[derive(Debug, Clone)]
@@ -25,6 +29,15 @@ pub enum Value {
     Tensor(Rc<RefCell<Tensor>>),
     Vector(Rc<Vec<f32>>),
     MemoryIndex(Rc<RefCell<HNSWIndex>>),
+    // M8: Agent & Model types
+    Agent(Rc<RefCell<AgentRuntime>>),
+    ModelVal(Rc<RefCell<ModelHandle>>),
+    ToolHandle(Rc<ToolDef>),
+    // M9: Closure
+    Closure { func_idx: u16, upvalues: Vec<Value> },
+    // M11: Async primitives
+    Future(u64),  // TaskId from executor
+    Channel(Rc<RefCell<Channel>>),
 }
 
 /// Native function wrapper
@@ -75,6 +88,12 @@ impl Value {
             Value::Tensor(_) => true,
             Value::Vector(v) => !v.is_empty(),
             Value::MemoryIndex(_) => true,
+            Value::Agent(_) => true,
+            Value::ModelVal(_) => true,
+            Value::ToolHandle(_) => true,
+            Value::Closure { .. } => true,
+            Value::Future(_) => true,
+            Value::Channel(_) => true,
         }
     }
     
@@ -94,6 +113,12 @@ impl Value {
             Value::Tensor(_) => "Tensor",
             Value::Vector(_) => "Vector",
             Value::MemoryIndex(_) => "MemoryIndex",
+            Value::Agent(_) => "Agent",
+            Value::ModelVal(_) => "Model",
+            Value::ToolHandle(_) => "Tool",
+            Value::Closure { .. } => "Closure",
+            Value::Future(_) => "Future",
+            Value::Channel(_) => "Channel",
         }
     }
 }
@@ -108,6 +133,7 @@ impl PartialEq for Value {
             (Value::Int(a), Value::Float(b)) => (*a as f64) == *b,
             (Value::Float(a), Value::Int(b)) => *a == (*b as f64),
             (Value::Str(a), Value::Str(b)) => a == b,
+            (Value::Future(a), Value::Future(b)) => a == b,
             _ => false,
         }
     }
@@ -153,6 +179,12 @@ impl std::fmt::Display for Value {
             Value::Tensor(t) => write!(f, "<Tensor shape={:?}>", t.borrow().shape()),
             Value::Vector(v) => write!(f, "<Vector len={}>", v.len()),
             Value::MemoryIndex(idx) => write!(f, "<MemoryIndex len={}>", idx.borrow().len()),
+            Value::Agent(a) => write!(f, "<Agent '{}'>", a.borrow().name),
+            Value::ModelVal(m) => write!(f, "<Model '{}'>", m.borrow().name),
+            Value::ToolHandle(t) => write!(f, "<Tool '{}'>", t.name),
+            Value::Closure { func_idx, upvalues } => write!(f, "<Closure func={} upvalues={}>", func_idx, upvalues.len()),
+            Value::Future(id) => write!(f, "<Future task={}>", id),
+            Value::Channel(ch) => write!(f, "<Channel '{}'>", ch.borrow().name),
         }
     }
 }

@@ -346,6 +346,25 @@ impl TypeContext {
     fn check_match(&mut self, match_stmt: &MatchStmt) {
         let subject_ty = self.check_expr(&match_stmt.subject);
         
+        // M9: Check pattern exhaustiveness
+        let result = crate::exhaustive::check_exhaustiveness(
+            &subject_ty,
+            &match_stmt.arms,
+        );
+        
+        if !result.is_exhaustive {
+            self.error(TypeError::non_exhaustive_match(
+                &result.missing_patterns,
+                match_stmt.subject.span(),
+            ));
+        }
+        
+        for arm_idx in &result.unreachable_arms {
+            if let Some(arm) = match_stmt.arms.get(*arm_idx) {
+                self.error(TypeError::unreachable_arm(arm.span));
+            }
+        }
+        
         for arm in &match_stmt.arms {
             self.enter_scope();
             

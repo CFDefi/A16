@@ -1,0 +1,9 @@
+[package]
+name = "a16_ffi"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+smol_str = { workspace = true }
+thiserror = { workspace = true }
+indexmap = { workspace = true }

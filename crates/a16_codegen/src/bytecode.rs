@@ -112,6 +112,11 @@ pub enum Opcode {
     BuildDict = 0x91,      // u16 count (pairs)
     BuildTuple = 0x92,     // u16 count
     
+    // Closures
+    MakeClosure = 0x95,    // u16 func_idx, u8 upvalue_count, then upvalue_count × (u8 is_local, u8 index)
+    GetUpvalue = 0x96,     // u8 upvalue_index
+    SetUpvalue = 0x97,     // u8 upvalue_index
+    
     // AI Operations
     ModelInvoke = 0xA0,
     ToolDispatch = 0xA1,
@@ -121,10 +126,20 @@ pub enum Opcode {
     // Async
     Await = 0xB0,
     Spawn = 0xB1,
+    SpawnTask = 0xB2,      // u16 func_idx, u8 argc — spawn function as concurrent task
+    JoinAll = 0xB3,        // u8 count — wait for N futures, push results as list
+    Yield = 0xB4,          // cooperative yield point
+    ChannelCreate = 0xB5,  // u16 capacity — create bounded channel
+    ChannelSend = 0xB6,    // send value into channel (stack: [channel, value])
+    ChannelRecv = 0xB7,    // receive value from channel (stack: [channel])
     
     // Iteration
     GetIter = 0xC0,
     ForIter = 0xC1,        // i16 offset (jump when exhausted)
+    
+    // FFI
+    FfiCall = 0xD0,        // u16 ffi_func_idx, u8 argc — call foreign function
+    FfiLoad = 0xD1,        // u16 lib_name_const_idx — load/register foreign library
     
     // Halt
     Halt = 0xFF,
@@ -181,14 +196,25 @@ impl Opcode {
             0x90 => Some(Opcode::BuildList),
             0x91 => Some(Opcode::BuildDict),
             0x92 => Some(Opcode::BuildTuple),
+            0x95 => Some(Opcode::MakeClosure),
+            0x96 => Some(Opcode::GetUpvalue),
+            0x97 => Some(Opcode::SetUpvalue),
             0xA0 => Some(Opcode::ModelInvoke),
             0xA1 => Some(Opcode::ToolDispatch),
             0xA2 => Some(Opcode::MemoryStore),
             0xA3 => Some(Opcode::MemoryRetrieve),
             0xB0 => Some(Opcode::Await),
             0xB1 => Some(Opcode::Spawn),
+            0xB2 => Some(Opcode::SpawnTask),
+            0xB3 => Some(Opcode::JoinAll),
+            0xB4 => Some(Opcode::Yield),
+            0xB5 => Some(Opcode::ChannelCreate),
+            0xB6 => Some(Opcode::ChannelSend),
+            0xB7 => Some(Opcode::ChannelRecv),
             0xC0 => Some(Opcode::GetIter),
             0xC1 => Some(Opcode::ForIter),
+            0xD0 => Some(Opcode::FfiCall),
+            0xD1 => Some(Opcode::FfiLoad),
             0xFF => Some(Opcode::Halt),
             _ => None,
         }

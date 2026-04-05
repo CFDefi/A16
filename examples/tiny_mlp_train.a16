@@ -1,0 +1,39 @@
+# A16 MLP Training Demo
+# Train a tiny MLP on a simple pattern using the native AI runtime
+
+# Create a 2-layer MLP: 2 inputs -> 4 hidden -> 1 output
+let model = mlp_create([2, 4, 1], "relu")
+println("Created MLP model")
+
+# Create training data (simple linear pattern: y = x1 + x2)
+let input = tensor_from_list([1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 0.5, 0.5], [4, 2])
+let target = tensor_from_list([1.0, 1.0, 2.0, 1.0], [4, 1])
+
+println("Training data prepared")
+println(tensor_shape(input))
+println(tensor_shape(target))
+
+# Run a forward pass
+let output = mlp_forward(model, input)
+println("Initial output:")
+println(tensor_data(output))
+
+# Train for a few steps
+let loss = mlp_train_step(model, [input, target, 0.01])
+println("Step 1 loss:")
+println(loss)
+
+let loss2 = mlp_train_step(model, [input, target, 0.01])
+println("Step 2 loss:")
+println(loss2)
+
+let loss3 = mlp_train_step(model, [input, target, 0.01])
+println("Step 3 loss:")
+println(loss3)
+
+# Final forward pass
+let final_output = mlp_forward(model, input)
+println("Final output:")
+println(tensor_data(final_output))
+
+println("Training complete!")

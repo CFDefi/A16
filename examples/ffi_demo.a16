@@ -1,0 +1,38 @@
+###
+FFI Demo
+========
+Demonstrates A16's Foreign Function Interface:
+  - extern blocks for declaring native functions
+  - ffi_load / ffi_list / ffi_unload stdlib functions
+###
+
+# Declare extern functions from a native math library
+extern "math_ext":
+    fn fast_sqrt(x: Float) -> Float
+    fn fast_pow(base: Float, exp: Float) -> Float
+
+# Declare extern functions from a string utilities library
+extern "str_utils":
+    fn to_upper(s: Str) -> Str
+    fn str_reverse(s: Str) -> Str
+
+
+fn main():
+    println("=== A16 FFI Demo ===")
+    println("")
+
+    # Load a built-in library
+    let loaded = ffi_load("math_ext", None)
+    println("Library loaded: " + str(loaded))
+
+    # List functions (returns empty in stub mode)
+    let funcs = ffi_list("math_ext")
+    println("Functions in math_ext: " + str(len(funcs)))
+
+    # Unload library
+    let unloaded = ffi_unload("math_ext")
+    println("Library unloaded: " + str(unloaded))
+
+    println("")
+    println("=== FFI Demo Complete ===")
+    return 0

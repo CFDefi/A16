@@ -1,0 +1,67 @@
+# A16 Closures & Pattern Matching Demo
+# Demonstrates M9 language features
+
+# === Closures ===
+
+# Simple closure that captures an outer variable
+fn make_counter():
+    let mut count = 0
+    fn increment():
+        count = count + 1
+        return count
+    return increment
+
+let counter = make_counter()
+println(counter())  # 1
+println(counter())  # 2
+
+# Closure as a callback
+fn apply(f, x):
+    return f(x)
+
+fn double(n):
+    return n * 2
+
+let result = apply(double, 5)
+println(result)  # 10
+
+# Higher-order function returning a closure
+fn multiplier(factor):
+    fn mul(x):
+        return x * factor
+    return mul
+
+let triple = multiplier(3)
+println(triple(7))  # 21
+
+# === Pattern Matching ===
+
+# Match on values
+fn describe(value):
+    match value:
+        case 0:
+            println("zero")
+        case 1:
+            println("one")
+        case _:
+            println("other number")
+
+describe(0)
+describe(1)
+describe(42)
+
+# Match on types
+fn greet(name):
+    match name:
+        case "Alice":
+            return "Hello, Alice!"
+        case "Bob":
+            return "Hey Bob!"
+        case other:
+            return "Hi, " + other + "!"
+
+println(greet("Alice"))
+println(greet("Bob"))
+println(greet("Charlie"))
+
+println("M9 demo complete!")

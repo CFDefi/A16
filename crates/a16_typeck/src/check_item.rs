@@ -20,6 +20,7 @@ impl TypeContext {
             Item::Enum(enum_def) => self.check_enum(enum_def),
             Item::Import(import) => self.check_import(import),
             Item::Const(const_def) => self.check_const(const_def),
+            Item::Extern(extern_block) => self.check_extern(extern_block),
             Item::Stmt(stmt) => self.check_stmt(stmt),
         }
     }
@@ -398,6 +399,23 @@ impl TypeContext {
         
         self.define_const(const_def.name.name.clone(), const_ty, const_def.name.span);
     }
+    
+    /// Check an extern block
+    fn check_extern(&mut self, extern_block: &ExternBlock) {
+        // Check each extern function declaration
+        for func in &extern_block.functions {
+            // Check parameter types
+            for param in &func.params {
+                if let Some(ref ty_expr) = param.ty {
+                    self.resolve_type_expr(ty_expr);
+                }
+            }
+            // Check return type
+            if let Some(ref ty_expr) = func.return_type {
+                self.resolve_type_expr(ty_expr);
+            }
+        }
+    }
 }
 
 /// First pass: register item types without full checking
@@ -665,6 +683,35 @@ pub fn register_item_type(ctx: &mut TypeContext, item: &Item) {
         
         Item::Const(_) | Item::Import(_) | Item::Stmt(_) => {
             // These are handled during check phase
+        }
+        
+        Item::Extern(extern_block) => {
+            // Register extern functions as callable types
+            for func in &extern_block.functions {
+                let param_types: Vec<Type> = func.params.iter()
+                    .map(|p| {
+                        if let Some(ref ty) = p.ty {
+                            ctx.resolve_type_expr(ty)
+                        } else {
+                            Type::Any
+                        }
+                    })
+                    .collect();
+                
+                let return_ty = if let Some(ref ty) = func.return_type {
+                    ctx.resolve_type_expr(ty)
+                } else {
+                    Type::Any
+                };
+                
+                let func_ty = Type::ExternFunc {
+                    lib_name: extern_block.lib_name.clone(),
+                    params: param_types,
+                    ret: Box::new(return_ty),
+                };
+                
+                ctx.define_const(func.name.name.clone(), func_ty, func.name.span);
+            }
         }
     }
 }

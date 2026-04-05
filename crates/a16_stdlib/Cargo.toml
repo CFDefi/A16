@@ -1,0 +1,9 @@
+[package]
+name = "a16_stdlib"
+version.workspace = true
+edition.workspace = true
+description = "Extended standard library modules for A16"
+
+[dependencies]
+smol_str = { workspace = true }
+serde_json = { workspace = true }

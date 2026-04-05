@@ -26,7 +26,7 @@ fn test_hnsw_insert_search() {
 
 #[test]
 fn test_hnsw_cosine_similarity() {
-    let index = HNSWIndex::new(3);
+    let _index = HNSWIndex::new(3);
     
     // Test that similar vectors get high scores
     let mut idx = HNSWIndex::new(3);
@@ -57,7 +57,7 @@ fn test_tfidf_embedder() {
     
     let vec1 = embedder.embed("hello world");
     let vec2 = embedder.embed("hello world");
-    let vec3 = embedder.embed("goodbye there");
+    let _vec3 = embedder.embed("goodbye there");
     
     assert_eq!(vec1.len(), 32);
     

@@ -5,6 +5,7 @@
 mod tensor;
 mod autograd;
 mod optim;
+pub mod mlp;
 
 #[cfg(test)]
 mod tests;
@@ -12,3 +13,4 @@ mod tests;
 pub use tensor::Tensor;
 pub use autograd::GradFn;
 pub use optim::{Optimizer, SGD};
+pub use mlp::{MLP, LinearLayer, Activation, mse_loss, train_step};

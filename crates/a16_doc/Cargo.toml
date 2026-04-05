@@ -1,0 +1,10 @@
+[package]
+name = "a16_doc"
+version.workspace = true
+edition.workspace = true
+description = "Documentation generator for A16 source code"
+
+[dependencies]
+a16_parser = { path = "../a16_parser" }
+a16_ast = { path = "../a16_ast" }
+smol_str = { workspace = true }

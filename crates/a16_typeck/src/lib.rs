@@ -12,6 +12,8 @@ mod builtins;
 mod check_expr;
 mod check_stmt;
 mod check_item;
+pub mod exhaustive;
+pub mod narrowing;
 
 #[cfg(test)]
 mod tests;
@@ -19,6 +21,7 @@ mod tests;
 pub use types::Type;
 pub use error::TypeError;
 pub use context::TypeContext;
+pub use narrowing::NarrowingContext;
 
 use a16_ast::Module;
 use check_item::register_item_type;

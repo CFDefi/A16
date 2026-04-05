@@ -1,0 +1,9 @@
+[package]
+name = "a16_resolver"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+smol_str = { workspace = true }
+indexmap = { workspace = true }
+thiserror = { workspace = true }

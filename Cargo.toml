@@ -11,6 +11,15 @@ members = [
     "crates/a16_cli",
     "crates/a16_vector",
     "crates/a16_tensor",
+    "crates/a16_resolver",
+    "crates/a16_pkg",
+    "crates/a16_runtime",
+    "crates/a16_ffi",
+    "crates/a16_fmt",
+    "crates/a16_lint",
+    "crates/a16_doc",
+    "crates/a16_lsp",
+    "crates/a16_stdlib",
 ]
 
 [workspace.package]

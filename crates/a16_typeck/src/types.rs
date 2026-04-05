@@ -118,6 +118,19 @@ pub enum Type {
     Iterator(Box<Type>),
     /// Result type: Result[T, E]
     Result(Box<Type>, Box<Type>),
+    
+    // =========================================================================
+    // FFI Types
+    // =========================================================================
+    
+    /// Raw pointer type (for FFI)
+    Ptr,
+    /// Extern function declaration type
+    ExternFunc {
+        lib_name: SmolStr,
+        params: Vec<Type>,
+        ret: Box<Type>,
+    },
 }
 
 impl Type {
@@ -261,6 +274,17 @@ impl fmt::Display for Type {
             Type::Never => write!(f, "Never"),
             Type::Iterator(elem) => write!(f, "Iterator[{}]", elem),
             Type::Result(ok, err) => write!(f, "Result[{}, {}]", ok, err),
+            
+            // FFI
+            Type::Ptr => write!(f, "Ptr"),
+            Type::ExternFunc { lib_name, params, ret } => {
+                write!(f, "extern[{}](", lib_name)?;
+                for (i, param) in params.iter().enumerate() {
+                    if i > 0 { write!(f, ", ")?; }
+                    write!(f, "{}", param)?;
+                }
+                write!(f, ") -> {}", ret)
+            }
         }
     }
 }

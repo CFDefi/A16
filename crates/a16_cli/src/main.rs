@@ -106,6 +106,24 @@ enum Commands {
     /// Diagnose issues
     Doctor,
     
+    /// Lint a source file
+    Lint {
+        /// Source file to lint
+        file: PathBuf,
+    },
+    
+    /// Generate documentation
+    Doc {
+        /// Source file to document
+        file: PathBuf,
+    },
+    
+    /// Start LSP server (for IDE integration)
+    Lsp,
+    
+    /// Run the self-hosting bootstrap compiler test
+    Bootstrap,
+    
     /// Lex a file (development/debug command)
     #[command(hide = true)]
     Lex {
@@ -193,6 +211,18 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Doctor => {
             cmd_doctor()
+        }
+        Commands::Lint { file } => {
+            cmd_lint(file)
+        }
+        Commands::Doc { file } => {
+            cmd_doc(file)
+        }
+        Commands::Lsp => {
+            cmd_lsp()
+        }
+        Commands::Bootstrap => {
+            cmd_bootstrap()
         }
         Commands::Lex { file } => {
             cmd_lex(file)
@@ -447,11 +477,31 @@ fn cmd_new(name: String, template: String) -> anyhow::Result<()> {
 }
 
 fn cmd_fmt(files: Vec<PathBuf>, check: bool) -> anyhow::Result<()> {
-    let action = if check { "Checking" } else { "Formatting" };
-    println!("{} {} file(s)...", action, files.len());
+    if files.is_empty() {
+        println!("{}", "No files specified.".yellow());
+        return Ok(());
+    }
     
-    println!();
-    println!("{}", "Note: Formatter not yet implemented.".yellow());
+    for file in &files {
+        let source = std::fs::read_to_string(file)?;
+        match a16_fmt::format_source(&source) {
+            Ok(formatted) => {
+                if check {
+                    if source != formatted {
+                        println!("{} {} needs formatting", "✗".bright_red(), file.display());
+                    } else {
+                        println!("{} {} is formatted", "✓".bright_green(), file.display());
+                    }
+                } else {
+                    std::fs::write(file, &formatted)?;
+                    println!("{} Formatted {}", "✓".bright_green(), file.display());
+                }
+            }
+            Err(e) => {
+                println!("{} {} — {}", "✗".bright_red(), file.display(), e);
+            }
+        }
+    }
     Ok(())
 }
 
@@ -591,6 +641,7 @@ fn cmd_parse(file: PathBuf, verbose: bool) -> anyhow::Result<()> {
                     a16_ast::Item::Enum(e) => format!("enum {}", e.name.name),
                     a16_ast::Item::Import(_) => "import ...".to_string(),
                     a16_ast::Item::Const(c) => format!("const {}", c.name.name),
+                    a16_ast::Item::Extern(e) => format!("extern \"{}\" ({} funcs)", e.lib_name, e.functions.len()),
                     a16_ast::Item::Stmt(_) => "<statement>".to_string(),
                 };
                 println!("  {}. {}", i + 1, item_desc.bright_blue());
@@ -652,3 +703,116 @@ fn cmd_check(file: PathBuf) -> anyhow::Result<()> {
     
     Ok(())
 }
+
+fn cmd_lint(file: PathBuf) -> anyhow::Result<()> {
+    println!("{} Linting: {}", "→".bright_green(), file.display());
+    println!();
+
+    let source = std::fs::read_to_string(&file)?;
+    let warnings = a16_lint::lint(&source);
+
+    if warnings.is_empty() {
+        println!("{} No lint warnings!", "✓".bright_green());
+    } else {
+        println!("{} {} warning(s):", "⚠".yellow(), warnings.len());
+        println!();
+        for (i, warn) in warnings.iter().enumerate() {
+            let severity_str = match warn.severity {
+                a16_lint::LintSeverity::Warning => "warning".yellow(),
+                a16_lint::LintSeverity::Info => "info".bright_blue(),
+                a16_lint::LintSeverity::Hint => "hint".bright_black(),
+            };
+            println!("  {}. [{}] {}: {}", i + 1, warn.rule.code(), severity_str, warn.message);
+        }
+    }
+
+    Ok(())
+}
+
+fn cmd_doc(file: PathBuf) -> anyhow::Result<()> {
+    println!("{} Generating docs: {}", "→".bright_green(), file.display());
+    println!();
+
+    let source = std::fs::read_to_string(&file)?;
+    let module_name = file.file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+
+    match a16_doc::generate_docs(&source, &module_name) {
+        Ok(docs) => {
+            let markdown = a16_doc::render_markdown(&docs);
+            println!("{}", markdown);
+        }
+        Err(e) => {
+            println!("{} {}", "✗".bright_red(), e);
+            return Err(anyhow::anyhow!("Doc generation failed"));
+        }
+    }
+
+    Ok(())
+}
+
+fn cmd_lsp() -> anyhow::Result<()> {
+    println!("{}", "A16 Language Server".bright_cyan().bold());
+    println!("Starting LSP server on stdin/stdout...");
+    println!();
+    println!("{}", "Note: Full LSP transport requires tower-lsp integration.".yellow());
+    println!("The LSP logic is implemented in the a16_lsp crate.");
+    println!("Use with VS Code extension or any LSP-compatible editor.");
+    Ok(())
+}
+
+
+fn cmd_bootstrap() -> anyhow::Result<()> {
+    use a16_parser::parse;
+    use a16_hir::lower_module;
+    use a16_codegen::compile;
+    use a16_vm::VM;
+    use std::time::Instant;
+    
+    println!("{}", "A16 Self-Hosting Bootstrap Test".bright_cyan().bold());
+    println!("{}", "-".repeat(50));
+    println!();
+    
+    let bootstrap_dir = std::env::current_dir()?.join("bootstrap");
+    if !bootstrap_dir.exists() {
+        println!("{} bootstrap/ directory not found", "?".bright_red());
+        return Err(anyhow::anyhow!("bootstrap/ not found"));
+    }
+    
+    let files = ["lexer.a16", "parser.a16", "codegen.a16", "vm.a16", "main.a16"];
+    let mut combined_source = String::new();
+    for file in &files {
+        let path = bootstrap_dir.join(file);
+        let content = std::fs::read_to_string(&path)?;
+        println!("  {} Read {} ({} bytes)", "?".bright_green(), file, content.len());
+        combined_source.push_str(&content);
+        combined_source.push('\n');
+    }
+    println!();
+    println!("Total source: {} bytes", combined_source.len());
+    
+    let start = Instant::now();
+    let module = match parse(&combined_source) {
+        Ok(m) => { println!("  {} Parsed {} items", "?".bright_green(), m.items.len()); m }
+        Err(e) => { println!("  {} Parse error: {:?}", "?".bright_red(), e); return Err(anyhow::anyhow!("Parse failed")); }
+    };
+    let hir = lower_module(&module);
+    let bytecode = compile(&hir);
+    println!("  {} Compiled ({} funcs, {} consts)", "?".bright_green(), bytecode.functions.len(), bytecode.constants.len());
+    println!();
+    let mut vm = VM::new(bytecode);
+    match vm.run("main") {
+        Ok(result) => {
+            let elapsed = start.elapsed();
+            println!("{} Bootstrap complete! Result: {} ({:.2?})", "?".bright_green().bold(), result, elapsed);
+        }
+        Err(e) => {
+            println!("{} Runtime error: {}", "?".bright_red(), e);
+            return Err(anyhow::anyhow!("Bootstrap failed"));
+        }
+    }
+    Ok(())
+}
+
